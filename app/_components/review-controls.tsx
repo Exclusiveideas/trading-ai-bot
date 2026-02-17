@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 type ReviewControlsProps = {
   current: number;
@@ -21,24 +24,18 @@ export function ReviewControls({ current, total, onPrev, onNext }: ReviewControl
   }, [onPrev, onNext]);
 
   return (
-    <div className="flex items-center justify-between rounded-md border border-zinc-200 bg-zinc-50 px-4 py-2 dark:border-zinc-700 dark:bg-zinc-800/50">
-      <button
-        onClick={onPrev}
-        disabled={current <= 0}
-        className="rounded px-2 py-1 text-sm font-medium text-zinc-600 hover:bg-zinc-200 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-700"
-      >
-        Prev
-      </button>
-      <span className="text-sm text-zinc-500 dark:text-zinc-400">
-        {total === 0 ? "No candidates" : `${current + 1} of ${total}`}
-      </span>
-      <button
-        onClick={onNext}
-        disabled={current >= total - 1}
-        className="rounded px-2 py-1 text-sm font-medium text-zinc-600 hover:bg-zinc-200 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-700"
-      >
-        Next
-      </button>
-    </div>
+    <Card>
+      <CardContent className="flex items-center justify-between px-3 py-2">
+        <Button variant="ghost" size="icon" onClick={onPrev} disabled={current <= 0} className="h-7 w-7">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="text-sm font-mono text-muted-foreground">
+          {total === 0 ? "No candidates" : `${current + 1} / ${total}`}
+        </span>
+        <Button variant="ghost" size="icon" onClick={onNext} disabled={current >= total - 1} className="h-7 w-7">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

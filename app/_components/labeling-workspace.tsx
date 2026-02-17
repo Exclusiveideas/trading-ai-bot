@@ -15,6 +15,17 @@ import type {
   PatternType,
   TrendState,
 } from "@/types/trading";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Search, Crosshair, X, BarChart3, Loader2 } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type CandleData = {
   timestamp: string;
@@ -46,8 +57,9 @@ type CandidateWithOutcome = PatternCandidate & {
 };
 
 const PAIRS = ["EUR/USD", "GBP/USD"];
+const ALL_PATTERNS_VALUE = "__all__";
 const PATTERN_TYPES: { value: string; label: string }[] = [
-  { value: "", label: "All Patterns" },
+  { value: ALL_PATTERNS_VALUE, label: "All Patterns" },
   { value: "pin_bar", label: "Pin Bar" },
   { value: "double_top", label: "Double Top" },
   { value: "double_bottom", label: "Double Bottom" },
@@ -251,45 +263,67 @@ export function LabelingWorkspace() {
     setMarkEnd(null);
   }, []);
 
+  const handlePatternFilterChange = (value: string) => {
+    setPatternFilter(value === ALL_PATTERNS_VALUE ? "" : value);
+  };
+
   return (
-    <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
-      <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold">Trading AI — Labeling</h1>
+    <div className="flex h-screen flex-col bg-background text-foreground">
+      <header className="flex items-center justify-between border-b border-border px-4 py-2">
+        <div className="flex items-center gap-2">
+          <h1 className="text-sm font-semibold tracking-tight">Trading AI</h1>
+          <Separator orientation="vertical" className="h-5" />
           <PairSelector
             pairs={PAIRS}
             selected={pair}
             onSelect={handlePairChange}
           />
-          <select
-            value={patternFilter}
-            onChange={(e) => setPatternFilter(e.target.value)}
-            className="rounded-md border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100"
+          <Select
+            value={patternFilter || ALL_PATTERNS_VALUE}
+            onValueChange={handlePatternFilterChange}
           >
-            {PATTERN_TYPES.map((pt) => (
-              <option key={pt.value} value={pt.value}>
-                {pt.label}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-[160px] h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PATTERN_TYPES.map((pt) => (
+                <SelectItem key={pt.value} value={pt.value}>
+                  {pt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Separator orientation="vertical" className="h-5" />
           {!candlesLoaded ? (
-            <button
+            <Button
+              size="sm"
               onClick={() => loadCandles(pair)}
               disabled={loading}
-              className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
+              {loading ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
+              )}
               {loading ? "Loading..." : "Load Chart"}
-            </button>
+            </Button>
           ) : (
             <>
-              <button
+              <Button
+                size="sm"
                 onClick={findCandidates}
                 disabled={loading || manualMode}
-                className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
+                {loading ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Search className="mr-1.5 h-3.5 w-3.5" />
+                )}
                 {loading ? "Scanning..." : "Find Candidates"}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant={manualMode ? "destructive" : "outline"}
+                size="sm"
                 onClick={() => {
                   if (manualMode) {
                     cancelManualMode();
@@ -299,25 +333,28 @@ export function LabelingWorkspace() {
                     setCurrentIdx(0);
                   }
                 }}
-                className={`rounded-md px-4 py-1.5 text-sm font-medium ${
-                  manualMode
-                    ? "bg-amber-600 text-white hover:bg-amber-700"
-                    : "border border-zinc-600 text-zinc-300 hover:bg-zinc-800"
-                }`}
               >
+                {manualMode ? (
+                  <X className="mr-1.5 h-3.5 w-3.5" />
+                ) : (
+                  <Crosshair className="mr-1.5 h-3.5 w-3.5" />
+                )}
                 {manualMode ? "Exit Manual" : "Manual Mark"}
-              </button>
+              </Button>
             </>
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-zinc-400">Labels: {labelCount}</span>
+          <span className="text-xs font-mono text-muted-foreground">
+            Labels: {labelCount}
+          </span>
           <ExportButton pair={pair} />
+          <ThemeToggle />
         </div>
       </header>
 
       <main className="flex min-h-0 flex-1">
-        <div className="flex-1 border-r border-zinc-800 p-2">
+        <div className="flex-1 p-2">
           {candles.length > 0 ? (
             <ChartPanel
               candles={candles}
@@ -340,15 +377,19 @@ export function LabelingWorkspace() {
               onCandleClick={manualMode ? handleCandleClick : undefined}
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-zinc-500">
-              {loading
-                ? "Loading chart data..."
-                : 'Click "Load Chart" to view candles'}
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+              <BarChart3 className="h-12 w-12 opacity-20" />
+              <div className="text-center">
+                <p className="text-sm font-medium">No chart data loaded</p>
+                <p className="mt-1 text-xs text-muted-foreground/70">
+                  Select a pair and click &quot;Load Chart&quot; to begin
+                </p>
+              </div>
             </div>
           )}
         </div>
 
-        <aside className="flex w-80 flex-col gap-3 overflow-y-auto p-3">
+        <aside className="flex w-[340px] flex-col gap-3 overflow-y-auto border-l border-border bg-card/50 p-3">
           {manualMode ? (
             <ManualMarkPanel
               startTimestamp={markStart?.timestamp ?? null}

@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
+import { toast } from "sonner";
 
 type ExportButtonProps = {
   pair: string;
@@ -15,7 +18,7 @@ export function ExportButton({ pair }: ExportButtonProps) {
       const res = await fetch(`/api/export?pair=${encodeURIComponent(pair)}`);
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "Export failed");
+        toast.error(data.error || "Export failed");
         return;
       }
       const blob = await res.blob();
@@ -31,12 +34,9 @@ export function ExportButton({ pair }: ExportButtonProps) {
   }
 
   return (
-    <button
-      onClick={handleExport}
-      disabled={loading}
-      className="rounded-md bg-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-300 disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-600"
-    >
+    <Button variant="outline" size="sm" onClick={handleExport} disabled={loading}>
+      <Download className="mr-1.5 h-3.5 w-3.5" />
       {loading ? "Exporting..." : "Export CSV"}
-    </button>
+    </Button>
   );
 }

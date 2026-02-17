@@ -2,6 +2,21 @@
 
 import { useState, useCallback } from "react";
 import type { PatternType } from "@/types/trading";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import { Save, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type ManualMarkPanelProps = {
   startTimestamp: string | null;
@@ -99,163 +114,198 @@ export function ManualMarkPanel({
   const step = startTimestamp === null ? 1 : endTimestamp === null ? 2 : 3;
 
   return (
-    <div className="space-y-4 rounded-lg border border-amber-500/30 bg-amber-950/20 p-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-amber-400">
-          Manual Mark Mode
-        </h3>
-        <button
-          onClick={onCancel}
-          className="text-xs text-zinc-400 hover:text-zinc-200"
-        >
-          Cancel (Esc)
-        </button>
-      </div>
+    <Card className="border-amber-500/30 bg-amber-950/10">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-amber-400">
+            Manual Mark Mode
+          </h3>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onCancel}
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Cancel (Esc)
+          </Button>
+        </div>
+      </CardHeader>
 
-      <div className="space-y-2 text-xs">
-        <div
-          className={`flex items-center gap-2 ${step === 1 ? "text-amber-400 font-semibold" : "text-zinc-500"}`}
-        >
-          <span
-            className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${step > 1 ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"}`}
+      <CardContent className="space-y-4">
+        <div className="space-y-2 text-xs">
+          <div
+            className={cn(
+              "flex items-center gap-2",
+              step === 1 ? "text-amber-400 font-semibold" : "text-muted-foreground",
+            )}
           >
-            {step > 1 ? "✓" : "1"}
-          </span>
-          <span>Click pattern start candle</span>
-          {startTimestamp && (
-            <span className="font-mono text-zinc-400">
-              {startTimestamp.split("T")[0]}
-            </span>
-          )}
-        </div>
-        <div
-          className={`flex items-center gap-2 ${step === 2 ? "text-amber-400 font-semibold" : "text-zinc-500"}`}
-        >
-          <span
-            className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${step > 2 ? "bg-emerald-600 text-white" : step === 2 ? "bg-amber-600 text-white" : "bg-zinc-700 text-zinc-400"}`}
-          >
-            {step > 2 ? "✓" : "2"}
-          </span>
-          <span>Click pattern end candle</span>
-          {endTimestamp && (
-            <span className="font-mono text-zinc-400">
-              {endTimestamp.split("T")[0]}
-            </span>
-          )}
-        </div>
-        <div
-          className={`flex items-center gap-2 ${step === 3 ? "text-amber-400 font-semibold" : "text-zinc-500"}`}
-        >
-          <span
-            className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${step === 3 ? "bg-amber-600 text-white" : "bg-zinc-700 text-zinc-400"}`}
-          >
-            3
-          </span>
-          <span>Fill details and save</span>
-        </div>
-      </div>
-
-      {canSave && (
-        <div className="space-y-3 border-t border-zinc-700 pt-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-zinc-300">
-              Pattern Type
-            </label>
-            <select
-              value={patternType}
-              onChange={(e) => setPatternType(e.target.value as PatternType)}
-              className="w-full rounded border border-zinc-600 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-100"
+            <span
+              className={cn(
+                "flex h-5 w-5 items-center justify-center rounded-full text-[10px]",
+                step > 1 ? "bg-emerald-600 text-white" : "bg-amber-600 text-white",
+              )}
             >
-              {PATTERN_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              {step > 1 ? <Check className="h-3 w-3" /> : "1"}
+            </span>
+            <span>Click pattern start candle</span>
+            {startTimestamp && (
+              <span className="font-mono text-muted-foreground">
+                {startTimestamp.split("T")[0]}
+              </span>
+            )}
           </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold text-zinc-300">
-                Entry
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={entryPrice}
-                onChange={(e) => setEntryPrice(e.target.value)}
-                className="w-full rounded border border-zinc-600 bg-zinc-800 px-2 py-1.5 text-xs font-mono text-zinc-100"
-                placeholder="1.10500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold text-red-400">
-                Stop Loss
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={stopLossPrice}
-                onChange={(e) => setStopLossPrice(e.target.value)}
-                className="w-full rounded border border-zinc-600 bg-zinc-800 px-2 py-1.5 text-xs font-mono text-zinc-100"
-                placeholder="1.09800"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold text-emerald-400">
-                Take Profit
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={takeProfitPrice}
-                onChange={(e) => setTakeProfitPrice(e.target.value)}
-                className="w-full rounded border border-zinc-600 bg-zinc-800 px-2 py-1.5 text-xs font-mono text-zinc-100"
-                placeholder="1.11900"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-zinc-300">
-              Quality Rating: {quality}
-            </label>
-            <input
-              type="range"
-              min={1}
-              max={10}
-              value={quality}
-              onChange={(e) => setQuality(parseInt(e.target.value, 10))}
-              className="w-full"
-            />
-            <div className="mt-1 flex justify-between text-[10px] text-zinc-500">
-              <span>1 (Poor)</span>
-              <span>10 (Perfect)</span>
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-zinc-300">
-              Notes (optional)
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="w-full rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs"
-              placeholder="Any observations..."
-            />
-          </div>
-
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+          <div
+            className={cn(
+              "flex items-center gap-2",
+              step === 2 ? "text-amber-400 font-semibold" : "text-muted-foreground",
+            )}
           >
-            {saving ? "Saving..." : "Save Manual Label"}
-          </button>
+            <span
+              className={cn(
+                "flex h-5 w-5 items-center justify-center rounded-full text-[10px]",
+                step > 2
+                  ? "bg-emerald-600 text-white"
+                  : step === 2
+                    ? "bg-amber-600 text-white"
+                    : "bg-zinc-700 text-zinc-400",
+              )}
+            >
+              {step > 2 ? <Check className="h-3 w-3" /> : "2"}
+            </span>
+            <span>Click pattern end candle</span>
+            {endTimestamp && (
+              <span className="font-mono text-muted-foreground">
+                {endTimestamp.split("T")[0]}
+              </span>
+            )}
+          </div>
+          <div
+            className={cn(
+              "flex items-center gap-2",
+              step === 3 ? "text-amber-400 font-semibold" : "text-muted-foreground",
+            )}
+          >
+            <span
+              className={cn(
+                "flex h-5 w-5 items-center justify-center rounded-full text-[10px]",
+                step === 3 ? "bg-amber-600 text-white" : "bg-zinc-700 text-zinc-400",
+              )}
+            >
+              3
+            </span>
+            <span>Fill details and save</span>
+          </div>
         </div>
-      )}
-    </div>
+
+        {canSave && (
+          <>
+            <Separator className="bg-zinc-700" />
+
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Pattern Type
+                </label>
+                <Select value={patternType} onValueChange={(v) => setPatternType(v as PatternType)}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PATTERN_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+                    Entry
+                  </label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={entryPrice}
+                    onChange={(e) => setEntryPrice(e.target.value)}
+                    placeholder="1.10500"
+                    className="h-8 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium text-red-400">
+                    Stop Loss
+                  </label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={stopLossPrice}
+                    onChange={(e) => setStopLossPrice(e.target.value)}
+                    placeholder="1.09800"
+                    className="h-8 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium text-emerald-400">
+                    Take Profit
+                  </label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={takeProfitPrice}
+                    onChange={(e) => setTakeProfitPrice(e.target.value)}
+                    placeholder="1.11900"
+                    className="h-8 font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 flex items-center justify-between text-xs font-medium text-muted-foreground">
+                  <span>Quality Rating</span>
+                  <span className="font-mono text-foreground">{quality}/10</span>
+                </label>
+                <Slider
+                  value={[quality]}
+                  onValueChange={([v]) => setQuality(v)}
+                  min={1}
+                  max={10}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="mt-1.5 flex justify-between text-[10px] text-muted-foreground/60">
+                  <span>Poor</span>
+                  <span>Perfect</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Notes (optional)
+                </label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Any observations..."
+                  className="text-xs resize-none"
+                />
+              </div>
+
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                <Save className="mr-1.5 h-3.5 w-3.5" />
+                {saving ? "Saving..." : "Save Manual Label"}
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

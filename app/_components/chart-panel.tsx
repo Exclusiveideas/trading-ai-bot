@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect } from "react";
+import { useTheme } from "next-themes";
 import { createChart, CandlestickSeries, LineSeries } from "lightweight-charts";
 import type {
   IChartApi,
@@ -35,6 +36,23 @@ type ChartPanelProps = {
   onCandleClick?: (timestamp: string, index: number) => void;
 };
 
+const CHART_THEMES = {
+  dark: {
+    background: "#09090b",
+    text: "#a1a1aa",
+    grid: "#27272a",
+    border: "#3f3f46",
+    bbColor: "#6b7280",
+  },
+  light: {
+    background: "#ffffff",
+    text: "#71717a",
+    grid: "#e4e4e7",
+    border: "#d4d4d8",
+    bbColor: "#a1a1aa",
+  },
+} as const;
+
 function toChartTime(timestamp: string): Time {
   return timestamp.split("T")[0] as Time;
 }
@@ -50,27 +68,31 @@ export function ChartPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const { resolvedTheme } = useTheme();
+
+  const isDark = resolvedTheme !== "light";
+  const colors = isDark ? CHART_THEMES.dark : CHART_THEMES.light;
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { color: "#09090b" },
-        textColor: "#a1a1aa",
+        background: { color: colors.background },
+        textColor: colors.text,
       },
       grid: {
-        vertLines: { color: "#27272a" },
-        horzLines: { color: "#27272a" },
+        vertLines: { color: colors.grid },
+        horzLines: { color: colors.grid },
       },
       crosshair: {
         mode: 0,
       },
       rightPriceScale: {
-        borderColor: "#3f3f46",
+        borderColor: colors.border,
       },
       timeScale: {
-        borderColor: "#3f3f46",
+        borderColor: colors.border,
         timeVisible: false,
       },
     });
@@ -106,13 +128,13 @@ export function ChartPanel({
     });
 
     const bbUpperSeries = chart.addSeries(LineSeries, {
-      color: "#6b7280",
+      color: colors.bbColor,
       lineWidth: 1,
       lineStyle: 2,
     });
 
     const bbLowerSeries = chart.addSeries(LineSeries, {
-      color: "#6b7280",
+      color: colors.bbColor,
       lineWidth: 1,
       lineStyle: 2,
     });
@@ -181,7 +203,7 @@ export function ChartPanel({
       chartRef.current = null;
       candleSeriesRef.current = null;
     };
-  }, [candles]);
+  }, [candles, colors]);
 
   useEffect(() => {
     if (!chartRef.current || !focusTimestamp || candles.length === 0) return;

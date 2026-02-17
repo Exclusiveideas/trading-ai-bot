@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 type PairSelectorProps = {
   pairs: string[];
   selected: string;
@@ -8,16 +16,17 @@ type PairSelectorProps = {
 
 export function PairSelector({ pairs, selected, onSelect }: PairSelectorProps) {
   return (
-    <select
-      value={selected}
-      onChange={(e) => onSelect(e.target.value)}
-      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-    >
-      {pairs.map((pair) => (
-        <option key={pair} value={pair}>
-          {pair}
-        </option>
-      ))}
-    </select>
+    <Select value={selected} onValueChange={onSelect}>
+      <SelectTrigger className="w-[130px] h-8 text-sm font-mono">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {pairs.map((pair) => (
+          <SelectItem key={pair} value={pair} className="font-mono">
+            {pair}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model RawCandle {
+  id        Int      @id @default(autoincrement())
+  pair      String   @db.VarChar(20)
+  timestamp DateTime @db.Timestamptz()
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float    @default(0)
+  timeframe String   @default("1day") @db.VarChar(10)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  features CalculatedFeature?
+
+  @@unique([pair, timestamp, timeframe])
+  @@index([pair, timestamp(sort: Desc)])
+  @@map("raw_candles")
+}
+
+model CalculatedFeature {
+  id            Int   @id @default(autoincrement())
+  candleId      Int   @unique @map("candle_id")
+  sma20         Float? @map("sma_20")
+  sma50         Float? @map("sma_50")
+  ema200        Float? @map("ema_200")
+  rsi           Float?
+  macd          Float?
+  macdSignal    Float? @map("macd_signal")
+  macdHistogram Float? @map("macd_histogram")
+  adx           Float?
+  atr           Float?
+  bbUpper       Float? @map("bb_upper")
+  bbMiddle      Float? @map("bb_middle")
+  bbLower       Float? @map("bb_lower")
+  volumeSma     Float? @map("volume_sma")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  candle RawCandle @relation(fields: [candleId], references: [id], onDelete: Cascade)
+
+  @@index([candleId])
+  @@map("calculated_features")
+}
+
+model LabeledPattern {
+  id              Int      @id @default(autoincrement())
+  pair            String   @db.VarChar(20)
+  patternType     String   @map("pattern_type") @db.VarChar(30)
+  startTimestamp  DateTime @map("start_timestamp") @db.Timestamptz()
+  endTimestamp    DateTime @map("end_timestamp") @db.Timestamptz()
+  entryPrice      Float    @map("entry_price")
+  stopLoss        Float    @map("stop_loss")
+  takeProfit      Float    @map("take_profit")
+  outcome         String   @default("pending") @db.VarChar(15)
+  rMultiple       Float?   @map("r_multiple")
+  barsToOutcome   Int?     @map("bars_to_outcome")
+  qualityRating   Int      @map("quality_rating")
+  trendState      String?  @map("trend_state") @db.VarChar(30)
+  session         String?  @db.VarChar(20)
+  supportQuality  Float?   @map("support_quality")
+  notes           String?
+  contextJson     Json?    @map("context_json")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([pair, patternType])
+  @@index([outcome])
+  @@map("labeled_patterns")
+}

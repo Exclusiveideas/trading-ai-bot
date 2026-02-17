@@ -94,6 +94,8 @@ export function ChartPanel({
       timeScale: {
         borderColor: colors.border,
         timeVisible: false,
+        barSpacing: 12,
+        minBarSpacing: 6,
       },
     });
 
@@ -175,7 +177,14 @@ export function ChartPanel({
     bbUpperSeries.setData(bbUpperData);
     bbLowerSeries.setData(bbLowerData);
 
-    chart.timeScale().fitContent();
+    if (candles.length > 100) {
+      const startIdx = candles.length - 100;
+      const from = toChartTime(candles[startIdx].timestamp);
+      const to = toChartTime(candles[candles.length - 1].timestamp);
+      chart.timeScale().setVisibleRange({ from, to });
+    } else {
+      chart.timeScale().fitContent();
+    }
 
     chart.subscribeCrosshairMove(() => {});
     chart.subscribeClick((param) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { PairSelector } from "./pair-selector";
 import { ExportButton } from "./export-button";
 import { ChartPanel } from "./chart-panel";
@@ -12,7 +12,6 @@ import { calculateOutcome } from "@/lib/pipeline/outcome-calculator";
 import type {
   PatternCandidate,
   OutcomeResult,
-  PatternType,
   TrendState,
 } from "@/types/trading";
 import { Button } from "@/components/ui/button";
@@ -24,8 +23,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Search, Crosshair, X, BarChart3, Loader2 } from "lucide-react";
+import {
+  Search,
+  Crosshair,
+  X,
+  BarChart3,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { toast } from "sonner";
 
 type CandleData = {
   timestamp: string;
@@ -50,10 +57,17 @@ type CandleData = {
   } | null;
 };
 
+type AnalysisData = {
+  qualityRating: number;
+  notes: string;
+  approved: boolean;
+};
+
 type CandidateWithOutcome = PatternCandidate & {
   outcome: OutcomeResult;
   startTimestamp: string;
   endTimestamp: string;
+  analysis?: AnalysisData;
 };
 
 const PAIRS = ["EUR/USD", "GBP/USD"];
@@ -66,6 +80,7 @@ const PATTERN_TYPES: { value: string; label: string }[] = [
   { value: "head_and_shoulders", label: "Head & Shoulders" },
   { value: "false_breakout", label: "False Breakout" },
 ];
+const DEFAULT_PLAYBACK_SPEED = 1500;
 
 export function LabelingWorkspace() {
   const [pair, setPair] = useState(PAIRS[0]);
@@ -86,6 +101,14 @@ export function LabelingWorkspace() {
     timestamp: string;
     index: number;
   } | null>(null);
+
+  const [analyzing, setAnalyzing] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(DEFAULT_PLAYBACK_SPEED);
+  const [playbackMode, setPlaybackMode] = useState(false);
+  const [approvedCount, setApprovedCount] = useState(0);
+  const [rejectedCount, setRejectedCount] = useState(0);
+  const playbackSavingRef = useRef(false);
 
   const loadCandles = useCallback(async (selectedPair: string) => {
     setLoading(true);
@@ -109,6 +132,8 @@ export function LabelingWorkspace() {
 
   const findCandidates = useCallback(async () => {
     setLoading(true);
+    setPlaybackMode(false);
+    setIsPlaying(false);
     try {
       const url = patternFilter
         ? `/api/candidates?pair=${encodeURIComponent(pair)}&patternType=${patternFilter}`
@@ -122,12 +147,40 @@ export function LabelingWorkspace() {
     }
   }, [pair, patternFilter]);
 
+  const runAnalysis = useCallback(async () => {
+    setAnalyzing(true);
+    setPlaybackMode(false);
+    setIsPlaying(false);
+    setApprovedCount(0);
+    setRejectedCount(0);
+    try {
+      const url = patternFilter
+        ? `/api/analyze?pair=${encodeURIComponent(pair)}&patternType=${patternFilter}`
+        : `/api/analyze?pair=${encodeURIComponent(pair)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      setCandidates(data.candidates);
+      setCurrentIdx(0);
+      setPlaybackMode(true);
+      setIsPlaying(true);
+      toast.success(
+        `Analysis complete: ${data.approvedCount} approved, ${data.rejectedCount} rejected`,
+      );
+    } catch {
+      toast.error("Analysis failed");
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [pair, patternFilter]);
+
   const handlePairChange = useCallback(
     (newPair: string) => {
       setPair(newPair);
       setCandidates([]);
       setCurrentIdx(0);
       setCandlesLoaded(false);
+      setPlaybackMode(false);
+      setIsPlaying(false);
       loadCandles(newPair);
     },
     [loadCandles],
@@ -135,33 +188,43 @@ export function LabelingWorkspace() {
 
   const currentCandidate = candidates[currentIdx] ?? null;
 
+  const saveLabel = useCallback(
+    async (
+      candidate: CandidateWithOutcome,
+      data: { qualityRating: number; notes: string },
+    ) => {
+      await fetch("/api/labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pair: candidate.pair,
+          patternType: candidate.patternType,
+          startTimestamp: candidate.startTimestamp,
+          endTimestamp: candidate.endTimestamp,
+          entryPrice: candidate.keyPriceLevels.entry,
+          stopLoss: candidate.keyPriceLevels.stopLoss,
+          takeProfit: candidate.keyPriceLevels.takeProfit,
+          outcome: candidate.outcome.outcome,
+          rMultiple: candidate.outcome.rMultiple,
+          barsToOutcome: candidate.outcome.barsToOutcome,
+          qualityRating: data.qualityRating,
+          trendState: candidate.contextSnapshot.trendState,
+          session: "daily",
+          supportQuality: null,
+          notes: data.notes || null,
+          contextJson: candidate.contextSnapshot,
+        }),
+      });
+    },
+    [],
+  );
+
   const handleApprove = useCallback(
     async (data: { qualityRating: number; notes: string }) => {
       if (!currentCandidate) return;
       setSaving(true);
       try {
-        await fetch("/api/labels", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            pair: currentCandidate.pair,
-            patternType: currentCandidate.patternType,
-            startTimestamp: currentCandidate.startTimestamp,
-            endTimestamp: currentCandidate.endTimestamp,
-            entryPrice: currentCandidate.keyPriceLevels.entry,
-            stopLoss: currentCandidate.keyPriceLevels.stopLoss,
-            takeProfit: currentCandidate.keyPriceLevels.takeProfit,
-            outcome: currentCandidate.outcome.outcome,
-            rMultiple: currentCandidate.outcome.rMultiple,
-            barsToOutcome: currentCandidate.outcome.barsToOutcome,
-            qualityRating: data.qualityRating,
-            trendState: currentCandidate.contextSnapshot.trendState,
-            session: "daily",
-            supportQuality: null,
-            notes: data.notes || null,
-            contextJson: currentCandidate.contextSnapshot,
-          }),
-        });
+        await saveLabel(currentCandidate, data);
         setLabelCount((c) => c + 1);
         if (currentIdx < candidates.length - 1) {
           setCurrentIdx((i) => i + 1);
@@ -170,7 +233,7 @@ export function LabelingWorkspace() {
         setSaving(false);
       }
     },
-    [currentCandidate, currentIdx, candidates.length],
+    [currentCandidate, currentIdx, candidates.length, saveLabel],
   );
 
   const handleReject = useCallback(() => {
@@ -178,6 +241,50 @@ export function LabelingWorkspace() {
       setCurrentIdx((i) => i + 1);
     }
   }, [currentIdx, candidates.length]);
+
+  // Playback timer
+  useEffect(() => {
+    if (!isPlaying || !playbackMode || candidates.length === 0) return;
+
+    const timer = setTimeout(async () => {
+      const candidate = candidates[currentIdx];
+      const analysis = candidate?.analysis;
+
+      if (candidate && analysis && !playbackSavingRef.current) {
+        if (analysis.approved) {
+          playbackSavingRef.current = true;
+          try {
+            await saveLabel(candidate, {
+              qualityRating: analysis.qualityRating,
+              notes: analysis.notes,
+            });
+            setLabelCount((c) => c + 1);
+            setApprovedCount((c) => c + 1);
+          } finally {
+            playbackSavingRef.current = false;
+          }
+        } else {
+          setRejectedCount((c) => c + 1);
+        }
+      }
+
+      if (currentIdx < candidates.length - 1) {
+        setCurrentIdx((i) => i + 1);
+      } else {
+        setIsPlaying(false);
+        toast.success("Playback complete — all candidates processed");
+      }
+    }, playbackSpeed);
+
+    return () => clearTimeout(timer);
+  }, [
+    isPlaying,
+    playbackMode,
+    currentIdx,
+    candidates,
+    playbackSpeed,
+    saveLabel,
+  ]);
 
   const handleCandleClick = useCallback(
     (timestamp: string, index: number) => {
@@ -263,6 +370,11 @@ export function LabelingWorkspace() {
     setMarkEnd(null);
   }, []);
 
+  const exitPlayback = useCallback(() => {
+    setPlaybackMode(false);
+    setIsPlaying(false);
+  }, []);
+
   const handlePatternFilterChange = (value: string) => {
     setPatternFilter(value === ALL_PATTERNS_VALUE ? "" : value);
   };
@@ -312,7 +424,7 @@ export function LabelingWorkspace() {
               <Button
                 size="sm"
                 onClick={findCandidates}
-                disabled={loading || manualMode}
+                disabled={loading || manualMode || analyzing}
               >
                 {loading ? (
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -320,6 +432,20 @@ export function LabelingWorkspace() {
                   <Search className="mr-1.5 h-3.5 w-3.5" />
                 )}
                 {loading ? "Scanning..." : "Find Candidates"}
+              </Button>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={runAnalysis}
+                disabled={loading || manualMode || analyzing}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {analyzing ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                {analyzing ? "Analyzing..." : "Analyze"}
               </Button>
               <Button
                 variant={manualMode ? "destructive" : "outline"}
@@ -331,8 +457,11 @@ export function LabelingWorkspace() {
                     setManualMode(true);
                     setCandidates([]);
                     setCurrentIdx(0);
+                    setPlaybackMode(false);
+                    setIsPlaying(false);
                   }
                 }}
+                disabled={analyzing}
               >
                 {manualMode ? (
                   <X className="mr-1.5 h-3.5 w-3.5" />
@@ -345,6 +474,12 @@ export function LabelingWorkspace() {
           )}
         </div>
         <div className="flex items-center gap-3">
+          {playbackMode && (
+            <Button variant="ghost" size="sm" onClick={exitPlayback}>
+              <X className="mr-1.5 h-3.5 w-3.5" />
+              Exit Playback
+            </Button>
+          )}
           <span className="text-xs font-mono text-muted-foreground">
             Labels: {labelCount}
           </span>
@@ -405,9 +540,25 @@ export function LabelingWorkspace() {
               <ReviewControls
                 current={currentIdx}
                 total={candidates.length}
-                onPrev={() => setCurrentIdx((i) => Math.max(0, i - 1))}
-                onNext={() =>
-                  setCurrentIdx((i) => Math.min(candidates.length - 1, i + 1))
+                onPrev={() => {
+                  setIsPlaying(false);
+                  setCurrentIdx((i) => Math.max(0, i - 1));
+                }}
+                onNext={() => {
+                  setIsPlaying(false);
+                  setCurrentIdx((i) => Math.min(candidates.length - 1, i + 1));
+                }}
+                playback={
+                  playbackMode
+                    ? {
+                        isPlaying,
+                        onTogglePlay: () => setIsPlaying((p) => !p),
+                        speed: playbackSpeed,
+                        onSpeedChange: setPlaybackSpeed,
+                        approvedCount,
+                        rejectedCount,
+                      }
+                    : undefined
                 }
               />
               <CandidateReviewCard
@@ -415,6 +566,8 @@ export function LabelingWorkspace() {
                 onApprove={handleApprove}
                 onReject={handleReject}
                 saving={saving}
+                analysis={currentCandidate?.analysis}
+                playbackMode={playbackMode}
               />
             </>
           )}

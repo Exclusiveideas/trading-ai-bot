@@ -41,8 +41,35 @@ export async function POST(request: NextRequest) {
     contextJson,
   } = body;
 
-  if (!pair || !patternType || !startTimestamp || !endTimestamp || !entryPrice || !stopLoss || !takeProfit || !qualityRating) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  if (
+    !pair ||
+    !patternType ||
+    !startTimestamp ||
+    !endTimestamp ||
+    !entryPrice ||
+    !stopLoss ||
+    !takeProfit ||
+    !qualityRating
+  ) {
+    return NextResponse.json(
+      { error: "Missing required fields" },
+      { status: 400 },
+    );
+  }
+
+  const existing = await prisma.labeledPattern.findFirst({
+    where: {
+      pair,
+      patternType,
+      startTimestamp: new Date(startTimestamp),
+    },
+  });
+
+  if (existing) {
+    return NextResponse.json(
+      { label: existing, duplicate: true },
+      { status: 200 },
+    );
   }
 
   const label = await prisma.labeledPattern.create({

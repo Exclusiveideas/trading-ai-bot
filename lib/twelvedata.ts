@@ -1,4 +1,4 @@
-import { TwelveDataResponse, Candle } from "@/types/trading";
+import type { TwelveDataResponse, Candle } from "@/types/trading";
 
 const BASE_URL = "https://api.twelvedata.com";
 

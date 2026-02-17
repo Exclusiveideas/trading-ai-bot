@@ -19,7 +19,8 @@ model RawCandle {
   timeframe String   @default("1day") @db.VarChar(10)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  features CalculatedFeature?
+  features        CalculatedFeature?
+  contextFeatures ContextFeature?
 
   @@unique([pair, timestamp, timeframe])
   @@index([pair, timestamp(sort: Desc)])
@@ -48,6 +49,27 @@ model CalculatedFeature {
 
   @@index([candleId])
   @@map("calculated_features")
+}
+
+model ContextFeature {
+  id                    Int      @id @default(autoincrement())
+  candleId              Int      @unique @map("candle_id")
+  nearestSupport        Float?   @map("nearest_support")
+  nearestResistance     Float?   @map("nearest_resistance")
+  distToSupportPips     Float?   @map("dist_to_support_pips")
+  distToResistancePips  Float?   @map("dist_to_resistance_pips")
+  distToSupportAtr      Float?   @map("dist_to_support_atr")
+  distToResistanceAtr   Float?   @map("dist_to_resistance_atr")
+  trendState            String?  @map("trend_state") @db.VarChar(30)
+  tradingSession        String?  @map("trading_session") @db.VarChar(20)
+  nearestRoundNumber    Float?   @map("nearest_round_number")
+  distToRoundNumberPips Float?   @map("dist_to_round_number_pips")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  candle RawCandle @relation(fields: [candleId], references: [id], onDelete: Cascade)
+
+  @@index([candleId])
+  @@map("context_features")
 }
 
 model LabeledPattern {

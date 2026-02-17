@@ -1,5 +1,11 @@
-export interface Candle {
-  id?: number;
+type Brand<T, B extends string> = T & { readonly __brand: B };
+
+export type RawCandleId = Brand<number, "RawCandleId">;
+export type CalculatedFeatureId = Brand<number, "CalculatedFeatureId">;
+export type ContextFeatureId = Brand<number, "ContextFeatureId">;
+
+export type Candle = {
+  id?: RawCandleId;
   pair: string;
   timestamp: string;
   open: number;
@@ -8,11 +14,11 @@ export interface Candle {
   close: number;
   volume: number;
   timeframe: string;
-}
+};
 
-export interface CalculatedFeatures {
-  id?: number;
-  candle_id: number;
+export type CalculatedFeatures = {
+  id?: CalculatedFeatureId;
+  candle_id: RawCandleId;
   sma_20: number | null;
   sma_50: number | null;
   ema_200: number | null;
@@ -26,7 +32,24 @@ export interface CalculatedFeatures {
   bb_middle: number | null;
   bb_lower: number | null;
   volume_sma: number | null;
-}
+};
+
+export type TradingSession = "asian" | "london" | "new_york" | "off_hours" | "daily";
+
+export type ContextFeatures = {
+  id?: ContextFeatureId;
+  candle_id: RawCandleId;
+  nearest_support: number | null;
+  nearest_resistance: number | null;
+  dist_to_support_pips: number | null;
+  dist_to_resistance_pips: number | null;
+  dist_to_support_atr: number | null;
+  dist_to_resistance_atr: number | null;
+  trend_state: TrendState | null;
+  trading_session: TradingSession | null;
+  nearest_round_number: number | null;
+  dist_to_round_number_pips: number | null;
+};
 
 export type PatternType =
   | "pin_bar"
@@ -44,8 +67,10 @@ export type TrendState =
   | "weak_downtrend"
   | "strong_downtrend";
 
-export interface LabeledPattern {
-  id?: number;
+export type LabeledPatternId = Brand<number, "LabeledPatternId">;
+
+export type LabeledPattern = {
+  id?: LabeledPatternId;
   pair: string;
   pattern_type: PatternType;
   start_timestamp: string;
@@ -63,18 +88,18 @@ export interface LabeledPattern {
   notes: string | null;
   context_json: Record<string, unknown> | null;
   created_at?: string;
-}
+};
 
-export interface TwelveDataCandle {
+export type TwelveDataCandle = {
   datetime: string;
   open: string;
   high: string;
   low: string;
   close: string;
   volume: string;
-}
+};
 
-export interface TwelveDataResponse {
+export type TwelveDataResponse = {
   meta: {
     symbol: string;
     interval: string;
@@ -84,4 +109,4 @@ export interface TwelveDataResponse {
   };
   values: TwelveDataCandle[];
   status: string;
-}
+};

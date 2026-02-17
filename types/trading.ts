@@ -34,7 +34,12 @@ export type CalculatedFeatures = {
   volume_sma: number | null;
 };
 
-export type TradingSession = "asian" | "london" | "new_york" | "off_hours" | "daily";
+export type TradingSession =
+  | "asian"
+  | "london"
+  | "new_york"
+  | "off_hours"
+  | "daily";
 
 export type ContextFeatures = {
   id?: ContextFeatureId;
@@ -98,6 +103,8 @@ export type DetectorCandle = {
   low: number;
   close: number;
   atr: number | null;
+  volume: number | null;
+  volumeSma: number | null;
 };
 
 export type AnchorPrice = {

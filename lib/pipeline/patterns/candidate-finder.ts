@@ -5,19 +5,26 @@ import type {
   CandidateContext,
   TrendState,
 } from "@/types/trading";
-import { detectPinBars, calculatePinBarLevels } from "./pin-bar";
-import { detectDoubleTops, calculateDoubleTopLevels } from "./double-top";
+import { detectPinBars, calculatePinBarLevels, scorePinBar } from "./pin-bar";
+import {
+  detectDoubleTops,
+  calculateDoubleTopLevels,
+  scoreDoubleTop,
+} from "./double-top";
 import {
   detectDoubleBottoms,
   calculateDoubleBottomLevels,
+  scoreDoubleBottom,
 } from "./double-bottom";
 import {
   detectHeadAndShoulders,
   calculateHaSLevels,
+  scoreHeadAndShoulders,
 } from "./head-and-shoulders";
 import {
   detectFalseBreakouts,
   calculateFalseBreakoutLevels,
+  scoreFalseBreakout,
 } from "./false-breakout";
 import { detectSupportResistanceLevels } from "../context-features";
 
@@ -27,13 +34,11 @@ export type EnrichedDetectorCandle = DetectorCandle & {
   nearestSupport: number | null;
   nearestResistance: number | null;
   rsi: number | null;
+  adx: number | null;
 };
 
-let candidateCounter = 0;
-
 function nextCandidateId(): CandidateId {
-  candidateCounter++;
-  return `candidate-${candidateCounter}` as CandidateId;
+  return crypto.randomUUID() as CandidateId;
 }
 
 function buildContext(candle: EnrichedDetectorCandle): CandidateContext {
@@ -90,6 +95,12 @@ export function findAllCandidates(
   for (const pb of pinBars) {
     const c = candles[pb.index];
     const levels = calculatePinBarLevels(c, pb.direction);
+    const qualityScore = scorePinBar(candles, pb.index, pb.direction, {
+      nearestSupport: c.nearestSupport,
+      nearestResistance: c.nearestResistance,
+      volume: c.volume,
+      volumeSma: c.volumeSma,
+    });
     candidates.push({
       id: nextCandidateId(),
       pair,
@@ -97,7 +108,7 @@ export function findAllCandidates(
       startIndex: pb.index,
       endIndex: pb.index,
       keyPriceLevels: levels,
-      confidence: calculatePinBarConfidence(c),
+      confidence: qualityScore / 10,
       contextSnapshot: buildContext(c),
     });
   }
@@ -105,14 +116,18 @@ export function findAllCandidates(
   const doubleTops = detectDoubleTops(candles);
   for (const dt of doubleTops) {
     const endCandle = candles[dt.secondTopIndex];
-    const topPrice = Math.max(
-      candles[dt.firstTopIndex].high,
-      candles[dt.secondTopIndex].high,
-    );
+    const startCandle = candles[dt.firstTopIndex];
+    const topPrice = Math.max(startCandle.high, endCandle.high);
     const levels = calculateDoubleTopLevels(
       { topPrice, necklinePrice: dt.necklinePrice },
       endCandle.atr,
     );
+    const qualityScore = scoreDoubleTop(candles, dt, {
+      rsiAtFirst: startCandle.rsi,
+      rsiAtSecond: endCandle.rsi,
+      volumeAtFirst: startCandle.volume,
+      volumeAtSecond: endCandle.volume,
+    });
     candidates.push({
       id: nextCandidateId(),
       pair,
@@ -120,7 +135,7 @@ export function findAllCandidates(
       startIndex: dt.firstTopIndex,
       endIndex: dt.secondTopIndex,
       keyPriceLevels: levels,
-      confidence: 0.6,
+      confidence: qualityScore / 10,
       contextSnapshot: buildContext(endCandle),
     });
   }
@@ -128,14 +143,18 @@ export function findAllCandidates(
   const doubleBottoms = detectDoubleBottoms(candles);
   for (const db of doubleBottoms) {
     const endCandle = candles[db.secondBottomIndex];
-    const bottomPrice = Math.min(
-      candles[db.firstBottomIndex].low,
-      candles[db.secondBottomIndex].low,
-    );
+    const startCandle = candles[db.firstBottomIndex];
+    const bottomPrice = Math.min(startCandle.low, endCandle.low);
     const levels = calculateDoubleBottomLevels(
       { bottomPrice, necklinePrice: db.necklinePrice },
       endCandle.atr,
     );
+    const qualityScore = scoreDoubleBottom(candles, db, {
+      rsiAtFirst: startCandle.rsi,
+      rsiAtSecond: endCandle.rsi,
+      volumeAtFirst: startCandle.volume,
+      volumeAtSecond: endCandle.volume,
+    });
     candidates.push({
       id: nextCandidateId(),
       pair,
@@ -143,7 +162,7 @@ export function findAllCandidates(
       startIndex: db.firstBottomIndex,
       endIndex: db.secondBottomIndex,
       keyPriceLevels: levels,
-      confidence: 0.6,
+      confidence: qualityScore / 10,
       contextSnapshot: buildContext(endCandle),
     });
   }
@@ -151,14 +170,21 @@ export function findAllCandidates(
   const hasPatterns = detectHeadAndShoulders(candles);
   for (const has of hasPatterns) {
     const endCandle = candles[has.endIndex];
+    const headCandle = candles[has.headIndex];
     const headPrice =
-      has.direction === "bearish"
-        ? candles[has.headIndex].high
-        : candles[has.headIndex].low;
+      has.direction === "bearish" ? headCandle.high : headCandle.low;
     const levels = calculateHaSLevels(
-      { headPrice, necklinePrice: has.necklinePrice, direction: has.direction },
+      {
+        headPrice,
+        necklinePrice: has.necklinePrice,
+        direction: has.direction,
+      },
       endCandle.atr,
     );
+    const qualityScore = scoreHeadAndShoulders(candles, has, {
+      rsiAtHead: headCandle.rsi,
+      rsiAtShoulder: candles[has.leftShoulderIndex].rsi,
+    });
     candidates.push({
       id: nextCandidateId(),
       pair,
@@ -166,7 +192,7 @@ export function findAllCandidates(
       startIndex: has.startIndex,
       endIndex: has.endIndex,
       keyPriceLevels: levels,
-      confidence: 0.7,
+      confidence: qualityScore / 10,
       contextSnapshot: buildContext(endCandle),
     });
   }
@@ -180,14 +206,18 @@ export function findAllCandidates(
   const falseBreakouts = detectFalseBreakouts(candles, srLevels);
   for (const fb of falseBreakouts) {
     const endCandle = candles[fb.reversalIndex];
+    const breakCandle = candles[fb.breakIndex];
     const extremePrice =
-      fb.direction === "bullish"
-        ? candles[fb.breakIndex].low
-        : candles[fb.breakIndex].high;
+      fb.direction === "bullish" ? breakCandle.low : breakCandle.high;
     const levels = calculateFalseBreakoutLevels(
       { brokenLevel: fb.brokenLevel, extremePrice, direction: fb.direction },
       endCandle.atr,
     );
+    const qualityScore = scoreFalseBreakout(candles, fb, {
+      volume: breakCandle.volume,
+      volumeSma: breakCandle.volumeSma,
+      reversalVolume: endCandle.volume,
+    });
     candidates.push({
       id: nextCandidateId(),
       pair,
@@ -195,7 +225,7 @@ export function findAllCandidates(
       startIndex: fb.breakIndex,
       endIndex: fb.reversalIndex,
       keyPriceLevels: levels,
-      confidence: 0.5,
+      confidence: qualityScore / 10,
       contextSnapshot: buildContext(endCandle),
     });
   }
@@ -211,24 +241,4 @@ export function findAllCandidates(
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, max)
     .sort((a, b) => a.startIndex - b.startIndex);
-}
-
-function calculatePinBarConfidence(candle: DetectorCandle): number {
-  const range = candle.high - candle.low;
-  if (range <= 0) return 0;
-
-  const body = Math.abs(candle.close - candle.open);
-  const bodyRatio = body / range;
-  const upperWick = candle.high - Math.max(candle.open, candle.close);
-  const lowerWick = Math.min(candle.open, candle.close) - candle.low;
-  const dominantWick = Math.max(upperWick, lowerWick);
-  const wickRatio = dominantWick / range;
-
-  const wickScore = Math.min(wickRatio / 0.8, 1);
-  const bodyScore = Math.min((0.35 - bodyRatio) / 0.35, 1);
-  return Math.max(0, Math.min(1, (wickScore + bodyScore) / 2));
-}
-
-export function resetCandidateCounter(): void {
-  candidateCounter = 0;
 }

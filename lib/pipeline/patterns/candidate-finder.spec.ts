@@ -1,14 +1,10 @@
-import { describe, expect, test, beforeEach } from "vitest";
+import { describe, expect, test } from "vitest";
 import type {
   TrendState,
   PatternCandidate,
   CandidateId,
 } from "@/types/trading";
-import {
-  findAllCandidates,
-  resetCandidateCounter,
-  deduplicateOverlapping,
-} from "./candidate-finder";
+import { findAllCandidates, deduplicateOverlapping } from "./candidate-finder";
 import type { EnrichedDetectorCandle } from "./candidate-finder";
 
 function makeEnrichedCandle(
@@ -24,18 +20,17 @@ function makeEnrichedCandle(
     low,
     close,
     atr: 0.005,
+    volume: null,
+    volumeSma: null,
     timestamp: "2024-01-15",
     trendState: "ranging" as TrendState,
     nearestSupport: null,
     nearestResistance: null,
     rsi: 50,
+    adx: null,
     ...overrides,
   };
 }
-
-beforeEach(() => {
-  resetCandidateCounter();
-});
 
 describe(findAllCandidates, () => {
   test("returns empty for empty candles", () => {

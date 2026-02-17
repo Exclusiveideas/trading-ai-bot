@@ -11,15 +11,25 @@ export type SupportResistanceLevel = {
   type: "support" | "resistance";
 };
 
+export type ScoredLevel = {
+  price: number;
+  touchCount: number;
+  recencyScore: number;
+  qualityScore: number;
+};
+
 export function detectSwingHighs(
   candles: PriceCandle[],
-  windowSize: number = 5
+  windowSize: number = 5,
 ): number[] {
   const levels: number[] = [];
   for (let i = windowSize; i < candles.length - windowSize; i++) {
     let isSwingHigh = true;
     for (let j = 1; j <= windowSize; j++) {
-      if (candles[i].high <= candles[i - j].high || candles[i].high <= candles[i + j].high) {
+      if (
+        candles[i].high <= candles[i - j].high ||
+        candles[i].high <= candles[i + j].high
+      ) {
         isSwingHigh = false;
         break;
       }
@@ -31,13 +41,16 @@ export function detectSwingHighs(
 
 export function detectSwingLows(
   candles: PriceCandle[],
-  windowSize: number = 5
+  windowSize: number = 5,
 ): number[] {
   const levels: number[] = [];
   for (let i = windowSize; i < candles.length - windowSize; i++) {
     let isSwingLow = true;
     for (let j = 1; j <= windowSize; j++) {
-      if (candles[i].low >= candles[i - j].low || candles[i].low >= candles[i + j].low) {
+      if (
+        candles[i].low >= candles[i - j].low ||
+        candles[i].low >= candles[i + j].low
+      ) {
         isSwingLow = false;
         break;
       }
@@ -49,7 +62,7 @@ export function detectSwingLows(
 
 export function clusterLevels(
   levels: number[],
-  clusterThreshold: number
+  clusterThreshold: number,
 ): number[] {
   if (levels.length === 0) return [];
 
@@ -58,7 +71,8 @@ export function clusterLevels(
 
   for (let i = 1; i < sorted.length; i++) {
     const lastCluster = clusters[clusters.length - 1];
-    const clusterAvg = lastCluster.reduce((s, v) => s + v, 0) / lastCluster.length;
+    const clusterAvg =
+      lastCluster.reduce((s, v) => s + v, 0) / lastCluster.length;
 
     if (Math.abs(sorted[i] - clusterAvg) <= clusterThreshold) {
       lastCluster.push(sorted[i]);
@@ -68,7 +82,7 @@ export function clusterLevels(
   }
 
   return clusters.map(
-    (cluster) => cluster.reduce((s, v) => s + v, 0) / cluster.length
+    (cluster) => cluster.reduce((s, v) => s + v, 0) / cluster.length,
   );
 }
 
@@ -76,7 +90,7 @@ export function detectSupportResistanceLevels(
   candles: PriceCandle[],
   lookback: number = 100,
   windowSize: number = 5,
-  clusterThreshold: number = 0.002
+  clusterThreshold: number = 0.002,
 ): number[] {
   const slice = candles.slice(-Math.min(lookback, candles.length));
   if (slice.length < windowSize * 2 + 1) return [];
@@ -88,9 +102,68 @@ export function detectSupportResistanceLevels(
   return clusterLevels(allLevels, clusterThreshold);
 }
 
+export function scoreSupportResistanceLevels(
+  candles: PriceCandle[],
+  lookback: number = 100,
+  windowSize: number = 5,
+  clusterThreshold: number = 0.002,
+): ScoredLevel[] {
+  const slice = candles.slice(-Math.min(lookback, candles.length));
+  if (slice.length < windowSize * 2 + 1) return [];
+
+  const totalBars = slice.length;
+  const swingHighIndices: { price: number; index: number }[] = [];
+  const swingLowIndices: { price: number; index: number }[] = [];
+
+  for (let i = windowSize; i < slice.length - windowSize; i++) {
+    let isHigh = true;
+    let isLow = true;
+    for (let j = 1; j <= windowSize; j++) {
+      if (
+        slice[i].high <= slice[i - j].high ||
+        slice[i].high <= slice[i + j].high
+      )
+        isHigh = false;
+      if (slice[i].low >= slice[i - j].low || slice[i].low >= slice[i + j].low)
+        isLow = false;
+      if (!isHigh && !isLow) break;
+    }
+    if (isHigh) swingHighIndices.push({ price: slice[i].high, index: i });
+    if (isLow) swingLowIndices.push({ price: slice[i].low, index: i });
+  }
+
+  const allSwings = [...swingHighIndices, ...swingLowIndices];
+  if (allSwings.length === 0) return [];
+
+  const sorted = [...allSwings].sort((a, b) => a.price - b.price);
+  const clusters: { price: number; index: number }[][] = [[sorted[0]]];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const lastCluster = clusters[clusters.length - 1];
+    const clusterAvg =
+      lastCluster.reduce((s, v) => s + v.price, 0) / lastCluster.length;
+    if (Math.abs(sorted[i].price - clusterAvg) <= clusterThreshold) {
+      lastCluster.push(sorted[i]);
+    } else {
+      clusters.push([sorted[i]]);
+    }
+  }
+
+  return clusters.map((cluster) => {
+    const avgPrice = cluster.reduce((s, v) => s + v.price, 0) / cluster.length;
+    const touchCount = cluster.length;
+    const mostRecentIndex = Math.max(...cluster.map((c) => c.index));
+    const recencyScore = totalBars > 0 ? mostRecentIndex / totalBars : 0;
+    const qualityScore =
+      (Math.min(touchCount, 5) / 5) * 0.6 + recencyScore * 0.4;
+
+    return { price: avgPrice, touchCount, recencyScore, qualityScore };
+  });
+}
+
 export function findNearestLevels(
   price: number,
-  levels: number[]
+  levels: number[],
 ): { support: number | null; resistance: number | null } {
   if (levels.length === 0) return { support: null, resistance: null };
 
@@ -114,7 +187,7 @@ export function distanceInPips(price: number, level: number): number {
 export function distanceInAtr(
   price: number,
   level: number,
-  atr: number | null
+  atr: number | null,
 ): number | null {
   if (atr === null || atr === 0) return null;
   return Math.abs(price - level) / atr;
@@ -125,7 +198,7 @@ export function classifyTrendState(
   sma50: number | null,
   ema200: number | null,
   adx: number | null,
-  close: number
+  close: number,
 ): TrendState | null {
   if (ema200 === null || adx === null || sma20 === null || sma50 === null) {
     return null;

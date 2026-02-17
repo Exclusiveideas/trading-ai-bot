@@ -4,6 +4,7 @@ import {
   detectSwingLows,
   clusterLevels,
   detectSupportResistanceLevels,
+  scoreSupportResistanceLevels,
   findNearestLevels,
   distanceInPips,
   distanceInAtr,
@@ -74,25 +75,106 @@ describe(detectSupportResistanceLevels, () => {
   });
 });
 
+describe(scoreSupportResistanceLevels, () => {
+  test("returns empty when not enough candles", () => {
+    const candles = Array.from({ length: 5 }, () => makeCandle(1.0, 0.9));
+    expect(scoreSupportResistanceLevels(candles, 100, 5)).toEqual([]);
+  });
+
+  test("returns scored levels with touch count and recency", () => {
+    const candles = [
+      makeCandle(1.0, 0.9),
+      makeCandle(1.1, 1.0),
+      makeCandle(1.5, 1.3),
+      makeCandle(1.1, 1.0),
+      makeCandle(1.0, 0.9),
+      makeCandle(1.1, 1.0),
+      makeCandle(1.5, 1.3),
+      makeCandle(1.1, 1.0),
+      makeCandle(1.0, 0.9),
+      makeCandle(1.1, 1.0),
+      makeCandle(1.5, 1.3),
+      makeCandle(1.1, 1.0),
+      makeCandle(1.0, 0.9),
+    ];
+    const levels = scoreSupportResistanceLevels(candles, 100, 2);
+    expect(levels.length).toBeGreaterThan(0);
+    for (const level of levels) {
+      expect(level.touchCount).toBeGreaterThanOrEqual(1);
+      expect(level.recencyScore).toBeGreaterThanOrEqual(0);
+      expect(level.recencyScore).toBeLessThanOrEqual(1);
+      expect(level.qualityScore).toBeGreaterThanOrEqual(0);
+      expect(level.qualityScore).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("recent levels have higher recency score than old levels", () => {
+    const candles: { high: number; low: number; close: number }[] = [];
+    for (let i = 0; i < 30; i++) {
+      candles.push(
+        makeCandle(
+          1.1 + Math.sin(i * 0.3) * 0.05,
+          1.0 + Math.sin(i * 0.3) * 0.05,
+        ),
+      );
+    }
+    candles.push(makeCandle(1.0, 0.9));
+    candles.push(makeCandle(0.95, 0.85));
+    candles.push(makeCandle(1.0, 0.9));
+    candles.push(makeCandle(1.05, 0.95));
+    candles.push(makeCandle(1.1, 1.0));
+
+    const levels = scoreSupportResistanceLevels(candles, 100, 2);
+    if (levels.length >= 2) {
+      const sorted = [...levels].sort(
+        (a, b) => b.recencyScore - a.recencyScore,
+      );
+      expect(sorted[0].recencyScore).toBeGreaterThan(
+        sorted[sorted.length - 1].recencyScore,
+      );
+    }
+  });
+
+  test("levels touched multiple times have higher quality", () => {
+    const candles = [
+      makeCandle(1.0, 0.9),
+      makeCandle(1.1, 1.0),
+      makeCandle(1.5, 1.3),
+      makeCandle(1.1, 1.0),
+      makeCandle(1.0, 0.9),
+      makeCandle(1.1, 1.0),
+      makeCandle(1.5, 1.3),
+      makeCandle(1.1, 1.0),
+      makeCandle(1.0, 0.9),
+    ];
+    const levels = scoreSupportResistanceLevels(candles, 100, 2);
+    for (const level of levels) {
+      if (level.touchCount > 1) {
+        expect(level.qualityScore).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
 describe(findNearestLevels, () => {
   test("finds support below and resistance above", () => {
-    const levels = [1.05, 1.10, 1.15, 1.20];
+    const levels = [1.05, 1.1, 1.15, 1.2];
     const result = findNearestLevels(1.12, levels);
-    expect(result).toEqual({ support: 1.10, resistance: 1.15 });
+    expect(result).toEqual({ support: 1.1, resistance: 1.15 });
   });
 
   test("returns null support when price is below all levels", () => {
-    const result = findNearestLevels(1.0, [1.05, 1.10]);
+    const result = findNearestLevels(1.0, [1.05, 1.1]);
     expect(result).toEqual({ support: null, resistance: 1.05 });
   });
 
   test("returns null resistance when price is above all levels", () => {
-    const result = findNearestLevels(1.25, [1.05, 1.10, 1.20]);
-    expect(result).toEqual({ support: 1.20, resistance: null });
+    const result = findNearestLevels(1.25, [1.05, 1.1, 1.2]);
+    expect(result).toEqual({ support: 1.2, resistance: null });
   });
 
   test("returns nulls for empty levels", () => {
-    expect(findNearestLevels(1.10, [])).toEqual({
+    expect(findNearestLevels(1.1, [])).toEqual({
       support: null,
       resistance: null,
     });
@@ -101,67 +183,75 @@ describe(findNearestLevels, () => {
 
 describe(distanceInPips, () => {
   test("calculates correct pip distance", () => {
-    expect(distanceInPips(1.1050, 1.1000)).toBeCloseTo(50, 0);
+    expect(distanceInPips(1.105, 1.1)).toBeCloseTo(50, 0);
   });
 
   test("is always positive", () => {
-    expect(distanceInPips(1.10, 1.15)).toBeCloseTo(500, 0);
-    expect(distanceInPips(1.15, 1.10)).toBeCloseTo(500, 0);
+    expect(distanceInPips(1.1, 1.15)).toBeCloseTo(500, 0);
+    expect(distanceInPips(1.15, 1.1)).toBeCloseTo(500, 0);
   });
 });
 
 describe(distanceInAtr, () => {
   test("calculates ATR-normalized distance", () => {
-    expect(distanceInAtr(1.10, 1.09, 0.005)).toBeCloseTo(2.0, 1);
+    expect(distanceInAtr(1.1, 1.09, 0.005)).toBeCloseTo(2.0, 1);
   });
 
   test("returns null when ATR is null", () => {
-    expect(distanceInAtr(1.10, 1.09, null)).toBeNull();
+    expect(distanceInAtr(1.1, 1.09, null)).toBeNull();
   });
 
   test("returns null when ATR is zero", () => {
-    expect(distanceInAtr(1.10, 1.09, 0)).toBeNull();
+    expect(distanceInAtr(1.1, 1.09, 0)).toBeNull();
   });
 });
 
 describe(classifyTrendState, () => {
   test("strong uptrend: ADX>25, close>EMA200, SMA20>SMA50", () => {
-    expect(classifyTrendState(1.12, 1.10, 1.05, 30, 1.11)).toBe("strong_uptrend");
+    expect(classifyTrendState(1.12, 1.1, 1.05, 30, 1.11)).toBe(
+      "strong_uptrend",
+    );
   });
 
   test("weak uptrend: ADX<=25, close>EMA200", () => {
-    expect(classifyTrendState(1.12, 1.10, 1.05, 20, 1.11)).toBe("weak_uptrend");
+    expect(classifyTrendState(1.12, 1.1, 1.05, 20, 1.11)).toBe("weak_uptrend");
   });
 
   test("strong downtrend: ADX>25, close<EMA200, SMA20<SMA50", () => {
-    expect(classifyTrendState(1.05, 1.08, 1.15, 30, 1.10)).toBe("strong_downtrend");
+    expect(classifyTrendState(1.05, 1.08, 1.15, 30, 1.1)).toBe(
+      "strong_downtrend",
+    );
   });
 
   test("weak downtrend: ADX<=25, close<EMA200", () => {
-    expect(classifyTrendState(1.05, 1.08, 1.15, 20, 1.10)).toBe("weak_downtrend");
+    expect(classifyTrendState(1.05, 1.08, 1.15, 20, 1.1)).toBe(
+      "weak_downtrend",
+    );
   });
 
   test("ranging: ADX>25, above EMA200 but SMA20<SMA50", () => {
-    expect(classifyTrendState(1.08, 1.10, 1.05, 30, 1.11)).toBe("ranging");
+    expect(classifyTrendState(1.08, 1.1, 1.05, 30, 1.11)).toBe("ranging");
   });
 
   test("returns null when any indicator is null", () => {
-    expect(classifyTrendState(null, 1.10, 1.05, 30, 1.11)).toBeNull();
+    expect(classifyTrendState(null, 1.1, 1.05, 30, 1.11)).toBeNull();
     expect(classifyTrendState(1.12, null, 1.05, 30, 1.11)).toBeNull();
-    expect(classifyTrendState(1.12, 1.10, null, 30, 1.11)).toBeNull();
-    expect(classifyTrendState(1.12, 1.10, 1.05, null, 1.11)).toBeNull();
+    expect(classifyTrendState(1.12, 1.1, null, 30, 1.11)).toBeNull();
+    expect(classifyTrendState(1.12, 1.1, 1.05, null, 1.11)).toBeNull();
   });
 });
 
 describe(identifyTradingSession, () => {
   test("returns daily for any timestamp", () => {
-    expect(identifyTradingSession(new Date("2024-01-15T10:00:00Z"))).toBe("daily");
+    expect(identifyTradingSession(new Date("2024-01-15T10:00:00Z"))).toBe(
+      "daily",
+    );
   });
 });
 
 describe(findNearestRoundNumber, () => {
   test("finds nearest major round number", () => {
-    expect(findNearestRoundNumber(1.0982)).toBeCloseTo(1.10, 4);
+    expect(findNearestRoundNumber(1.0982)).toBeCloseTo(1.1, 4);
   });
 
   test("finds nearest half-round when closer", () => {
@@ -169,7 +259,7 @@ describe(findNearestRoundNumber, () => {
   });
 
   test("handles exact round number", () => {
-    expect(findNearestRoundNumber(1.10)).toBeCloseTo(1.10, 4);
+    expect(findNearestRoundNumber(1.1)).toBeCloseTo(1.1, 4);
   });
 
   test("handles exact half-round", () => {

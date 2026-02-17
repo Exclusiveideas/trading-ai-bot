@@ -90,6 +90,54 @@ export type LabeledPattern = {
   created_at?: string;
 };
 
+export type CandidateId = Brand<string, "CandidateId">;
+
+export type DetectorCandle = {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  atr: number | null;
+};
+
+export type AnchorPrice = {
+  label: string;
+  price: number;
+};
+
+export type KeyPriceLevels = {
+  entry: number;
+  stopLoss: number;
+  takeProfit: number;
+  anchorPrices: AnchorPrice[];
+};
+
+export type CandidateContext = {
+  trendState: TrendState | null;
+  nearestSupport: number | null;
+  nearestResistance: number | null;
+  atr: number | null;
+  rsi: number | null;
+};
+
+export type PatternCandidate = {
+  id: CandidateId;
+  pair: string;
+  patternType: PatternType;
+  startIndex: number;
+  endIndex: number;
+  keyPriceLevels: KeyPriceLevels;
+  confidence: number;
+  contextSnapshot: CandidateContext;
+};
+
+export type OutcomeResult = {
+  outcome: Outcome;
+  rMultiple: number | null;
+  barsToOutcome: number | null;
+  exitPrice: number | null;
+};
+
 export type TwelveDataCandle = {
   datetime: string;
   open: string;

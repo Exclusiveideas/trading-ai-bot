@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useTheme } from "next-themes";
 import { createChart, CandlestickSeries, LineSeries } from "lightweight-charts";
 import type {
@@ -9,6 +9,7 @@ import type {
   CandlestickData,
   LineData,
   Time,
+  LogicalRange,
 } from "lightweight-charts";
 
 type CandleData = {
@@ -34,6 +35,7 @@ type ChartPanelProps = {
   stopLoss?: number;
   takeProfit?: number;
   onCandleClick?: (timestamp: string, index: number) => void;
+  onLoadMore?: () => void;
 };
 
 const CHART_THEMES = {
@@ -53,9 +55,55 @@ const CHART_THEMES = {
   },
 } as const;
 
+const SCROLL_LOAD_THRESHOLD = 10;
+const INITIAL_VISIBLE_BARS = 40;
+
 function toChartTime(timestamp: string): Time {
   return timestamp.split("T")[0] as Time;
 }
+
+function buildCandleData(candles: CandleData[]): CandlestickData[] {
+  return candles.map((c) => ({
+    time: toChartTime(c.timestamp),
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+  }));
+}
+
+function buildIndicatorData(candles: CandleData[]) {
+  const sma20: LineData[] = [];
+  const sma50: LineData[] = [];
+  const ema200: LineData[] = [];
+  const bbUpper: LineData[] = [];
+  const bbLower: LineData[] = [];
+
+  for (const c of candles) {
+    const time = toChartTime(c.timestamp);
+    if (c.features?.sma20 != null)
+      sma20.push({ time, value: c.features.sma20 });
+    if (c.features?.sma50 != null)
+      sma50.push({ time, value: c.features.sma50 });
+    if (c.features?.ema200 != null)
+      ema200.push({ time, value: c.features.ema200 });
+    if (c.features?.bbUpper != null)
+      bbUpper.push({ time, value: c.features.bbUpper });
+    if (c.features?.bbLower != null)
+      bbLower.push({ time, value: c.features.bbLower });
+  }
+
+  return { sma20, sma50, ema200, bbUpper, bbLower };
+}
+
+type SeriesRefs = {
+  candle: ISeriesApi<"Candlestick">;
+  sma20: ISeriesApi<"Line">;
+  sma50: ISeriesApi<"Line">;
+  ema200: ISeriesApi<"Line">;
+  bbUpper: ISeriesApi<"Line">;
+  bbLower: ISeriesApi<"Line">;
+};
 
 export function ChartPanel({
   candles,
@@ -64,15 +112,37 @@ export function ChartPanel({
   stopLoss,
   takeProfit,
   onCandleClick,
+  onLoadMore,
 }: ChartPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const seriesRef = useRef<SeriesRefs | null>(null);
+  const prevDataLengthRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  const onCandleClickRef = useRef(onCandleClick);
+  const onLoadMoreRef = useRef(onLoadMore);
+  const candlesRef = useRef(candles);
   const { resolvedTheme } = useTheme();
 
   const isDark = resolvedTheme !== "light";
   const colors = isDark ? CHART_THEMES.dark : CHART_THEMES.light;
 
+  onCandleClickRef.current = onCandleClick;
+  onLoadMoreRef.current = onLoadMore;
+  candlesRef.current = candles;
+
+  const handleVisibleRangeChange = useCallback((range: LogicalRange | null) => {
+    if (!range || loadingMoreRef.current) return;
+    if (range.from < SCROLL_LOAD_THRESHOLD && onLoadMoreRef.current) {
+      loadingMoreRef.current = true;
+      onLoadMoreRef.current();
+      setTimeout(() => {
+        loadingMoreRef.current = false;
+      }, 300);
+    }
+  }, []);
+
+  // Chart creation (mount only)
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -85,9 +155,7 @@ export function ChartPanel({
         vertLines: { color: colors.grid },
         horzLines: { color: colors.grid },
       },
-      crosshair: {
-        mode: 0,
-      },
+      crosshair: { mode: 0 },
       rightPriceScale: {
         borderColor: colors.border,
         autoScale: true,
@@ -96,8 +164,8 @@ export function ChartPanel({
       timeScale: {
         borderColor: colors.border,
         timeVisible: false,
-        barSpacing: 12,
-        minBarSpacing: 8,
+        barSpacing: 14,
+        minBarSpacing: 14,
       },
     });
 
@@ -111,100 +179,68 @@ export function ChartPanel({
       wickDownColor: "#ef4444",
       wickUpColor: "#22c55e",
     });
-    candleSeriesRef.current = candleSeries;
 
-    const indicatorScaleId = "indicators";
+    const noAutoscale = {
+      autoscaleInfoProvider: () => null,
+    };
 
     const sma20Series = chart.addSeries(LineSeries, {
       color: "#3b82f6",
       lineWidth: 1,
       title: "SMA20",
-      priceScaleId: indicatorScaleId,
+      ...noAutoscale,
     });
 
     const sma50Series = chart.addSeries(LineSeries, {
       color: "#f59e0b",
       lineWidth: 1,
       title: "SMA50",
-      priceScaleId: indicatorScaleId,
+      ...noAutoscale,
     });
 
     const ema200Series = chart.addSeries(LineSeries, {
       color: "#a855f7",
       lineWidth: 1,
       title: "EMA200",
-      priceScaleId: indicatorScaleId,
+      ...noAutoscale,
     });
 
     const bbUpperSeries = chart.addSeries(LineSeries, {
       color: colors.bbColor,
       lineWidth: 1,
       lineStyle: 2,
-      priceScaleId: indicatorScaleId,
+      ...noAutoscale,
     });
 
     const bbLowerSeries = chart.addSeries(LineSeries, {
       color: colors.bbColor,
       lineWidth: 1,
       lineStyle: 2,
-      priceScaleId: indicatorScaleId,
+      ...noAutoscale,
     });
 
-    chart.priceScale(indicatorScaleId).applyOptions({ visible: false });
+    seriesRef.current = {
+      candle: candleSeries,
+      sma20: sma20Series,
+      sma50: sma50Series,
+      ema200: ema200Series,
+      bbUpper: bbUpperSeries,
+      bbLower: bbLowerSeries,
+    };
 
-    const candleChartData: CandlestickData[] = candles.map((c) => ({
-      time: toChartTime(c.timestamp),
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-    }));
+    chart
+      .timeScale()
+      .subscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
 
-    candleSeries.setData(candleChartData);
-
-    const sma20Data: LineData[] = [];
-    const sma50Data: LineData[] = [];
-    const ema200Data: LineData[] = [];
-    const bbUpperData: LineData[] = [];
-    const bbLowerData: LineData[] = [];
-
-    for (const c of candles) {
-      const time = toChartTime(c.timestamp);
-      if (c.features?.sma20 != null)
-        sma20Data.push({ time, value: c.features.sma20 });
-      if (c.features?.sma50 != null)
-        sma50Data.push({ time, value: c.features.sma50 });
-      if (c.features?.ema200 != null)
-        ema200Data.push({ time, value: c.features.ema200 });
-      if (c.features?.bbUpper != null)
-        bbUpperData.push({ time, value: c.features.bbUpper });
-      if (c.features?.bbLower != null)
-        bbLowerData.push({ time, value: c.features.bbLower });
-    }
-
-    sma20Series.setData(sma20Data);
-    sma50Series.setData(sma50Data);
-    ema200Series.setData(ema200Data);
-    bbUpperSeries.setData(bbUpperData);
-    bbLowerSeries.setData(bbLowerData);
-
-    if (candles.length > 100) {
-      const startIdx = candles.length - 100;
-      const from = toChartTime(candles[startIdx].timestamp);
-      const to = toChartTime(candles[candles.length - 1].timestamp);
-      chart.timeScale().setVisibleRange({ from, to });
-    } else {
-      chart.timeScale().fitContent();
-    }
-
-    chart.subscribeCrosshairMove(() => {});
     chart.subscribeClick((param) => {
-      if (!onCandleClick || !param.time) return;
+      if (!onCandleClickRef.current || !param.time) return;
       const timeStr = String(param.time);
-      const idx = candles.findIndex(
+      const currentCandles = candlesRef.current;
+      const idx = currentCandles.findIndex(
         (c) => c.timestamp.split("T")[0] === timeStr,
       );
-      if (idx !== -1) onCandleClick(candles[idx].timestamp, idx);
+      if (idx !== -1)
+        onCandleClickRef.current(currentCandles[idx].timestamp, idx);
     });
 
     const resizeObserver = new ResizeObserver(() => {
@@ -221,10 +257,67 @@ export function ChartPanel({
       resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
-      candleSeriesRef.current = null;
+      seriesRef.current = null;
+      prevDataLengthRef.current = 0;
     };
-  }, [candles, colors]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Theme updates
+  useEffect(() => {
+    if (!chartRef.current) return;
+    chartRef.current.applyOptions({
+      layout: {
+        background: { color: colors.background },
+        textColor: colors.text,
+      },
+      grid: {
+        vertLines: { color: colors.grid },
+        horzLines: { color: colors.grid },
+      },
+      rightPriceScale: { borderColor: colors.border },
+      timeScale: { borderColor: colors.border },
+    });
+  }, [colors]);
+
+  // Data updates
+  useEffect(() => {
+    if (!seriesRef.current || !chartRef.current || candles.length === 0) return;
+
+    const prevLength = prevDataLengthRef.current;
+    const currentRange = chartRef.current.timeScale().getVisibleLogicalRange();
+
+    const candleData = buildCandleData(candles);
+    const indicators = buildIndicatorData(candles);
+
+    seriesRef.current.candle.setData(candleData);
+    seriesRef.current.sma20.setData(indicators.sma20);
+    seriesRef.current.sma50.setData(indicators.sma50);
+    seriesRef.current.ema200.setData(indicators.ema200);
+    seriesRef.current.bbUpper.setData(indicators.bbUpper);
+    seriesRef.current.bbLower.setData(indicators.bbLower);
+
+    if (prevLength > 0 && candles.length > prevLength && currentRange) {
+      // Data was prepended — shift visible range to preserve scroll position
+      const added = candles.length - prevLength;
+      chartRef.current.timeScale().setVisibleLogicalRange({
+        from: currentRange.from + added,
+        to: currentRange.to + added,
+      });
+    } else if (prevLength === 0 && candles.length > INITIAL_VISIBLE_BARS) {
+      // Initial load — show last N candles
+      const startIdx = candles.length - INITIAL_VISIBLE_BARS;
+      const from = toChartTime(candles[startIdx].timestamp);
+      const to = toChartTime(candles[candles.length - 1].timestamp);
+      chartRef.current.timeScale().setVisibleRange({ from, to });
+    } else if (prevLength === 0) {
+      chartRef.current.timeScale().fitContent();
+    }
+
+    prevDataLengthRef.current = candles.length;
+  }, [candles]);
+
+  // Focus timestamp
   useEffect(() => {
     if (!chartRef.current || !focusTimestamp || candles.length === 0) return;
 
@@ -243,16 +336,18 @@ export function ChartPanel({
     chartRef.current.timeScale().setVisibleRange({ from, to });
   }, [focusTimestamp, candles]);
 
+  // Price lines
   useEffect(() => {
-    if (!candleSeriesRef.current) return;
+    if (!seriesRef.current) return;
+    const candleSeries = seriesRef.current.candle;
 
-    const pricelines = candleSeriesRef.current.priceLines?.() ?? [];
+    const pricelines = candleSeries.priceLines?.() ?? [];
     for (const line of pricelines) {
-      candleSeriesRef.current.removePriceLine(line);
+      candleSeries.removePriceLine(line);
     }
 
     if (entryPrice != null) {
-      candleSeriesRef.current.createPriceLine({
+      candleSeries.createPriceLine({
         price: entryPrice,
         color: "#3b82f6",
         lineWidth: 1,
@@ -261,7 +356,7 @@ export function ChartPanel({
       });
     }
     if (stopLoss != null) {
-      candleSeriesRef.current.createPriceLine({
+      candleSeries.createPriceLine({
         price: stopLoss,
         color: "#ef4444",
         lineWidth: 1,
@@ -270,7 +365,7 @@ export function ChartPanel({
       });
     }
     if (takeProfit != null) {
-      candleSeriesRef.current.createPriceLine({
+      candleSeries.createPriceLine({
         price: takeProfit,
         color: "#22c55e",
         lineWidth: 1,

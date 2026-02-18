@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { PairSelector } from "./pair-selector";
 import { ExportButton } from "./export-button";
 import { ChartPanel } from "./chart-panel";
@@ -81,6 +81,8 @@ const PATTERN_TYPES: { value: string; label: string }[] = [
   { value: "false_breakout", label: "False Breakout" },
 ];
 const DEFAULT_PLAYBACK_SPEED = 1500;
+const CHART_WINDOW_SIZE = 50;
+const CHART_LOAD_MORE_SIZE = 50;
 
 export function LabelingWorkspace() {
   const [pair, setPair] = useState(PAIRS[0]);
@@ -108,6 +110,7 @@ export function LabelingWorkspace() {
   const [playbackMode, setPlaybackMode] = useState(false);
   const [approvedCount, setApprovedCount] = useState(0);
   const [rejectedCount, setRejectedCount] = useState(0);
+  const [chartDisplayCount, setChartDisplayCount] = useState(CHART_WINDOW_SIZE);
   const playbackSavingRef = useRef(false);
 
   const loadCandles = useCallback(async (selectedPair: string) => {
@@ -117,7 +120,9 @@ export function LabelingWorkspace() {
         `/api/candles?pair=${encodeURIComponent(selectedPair)}`,
       );
       const data = await res.json();
-      setCandles(data.candles);
+      const loadedCandles: CandleData[] = data.candles;
+      setCandles(loadedCandles);
+      setChartDisplayCount(CHART_WINDOW_SIZE);
       setCandlesLoaded(true);
 
       const labelsRes = await fetch(
@@ -128,6 +133,17 @@ export function LabelingWorkspace() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const chartWindowStart = Math.max(0, candles.length - chartDisplayCount);
+
+  const chartCandles = useMemo(
+    () => candles.slice(chartWindowStart),
+    [candles, chartWindowStart],
+  );
+
+  const handleLoadMore = useCallback(() => {
+    setChartDisplayCount((prev) => prev + CHART_LOAD_MORE_SIZE);
   }, []);
 
   const findCandidates = useCallback(async () => {
@@ -179,6 +195,7 @@ export function LabelingWorkspace() {
       setCandidates([]);
       setCurrentIdx(0);
       setCandlesLoaded(false);
+      setChartDisplayCount(CHART_WINDOW_SIZE);
       setPlaybackMode(false);
       setIsPlaying(false);
       loadCandles(newPair);
@@ -289,19 +306,20 @@ export function LabelingWorkspace() {
   const handleCandleClick = useCallback(
     (timestamp: string, index: number) => {
       if (!manualMode) return;
+      const fullIndex = chartWindowStart + index;
       if (markStart === null) {
-        setMarkStart({ timestamp, index });
+        setMarkStart({ timestamp, index: fullIndex });
       } else if (markEnd === null) {
         const start = markStart;
-        if (index < start.index) {
-          setMarkStart({ timestamp, index });
+        if (fullIndex < start.index) {
+          setMarkStart({ timestamp, index: fullIndex });
           setMarkEnd(start);
         } else {
-          setMarkEnd({ timestamp, index });
+          setMarkEnd({ timestamp, index: fullIndex });
         }
       }
     },
-    [manualMode, markStart, markEnd],
+    [manualMode, markStart, markEnd, chartWindowStart],
   );
 
   const handleManualSave = useCallback(
@@ -492,7 +510,7 @@ export function LabelingWorkspace() {
         <div className="flex-1 p-2">
           {candles.length > 0 ? (
             <ChartPanel
-              candles={candles}
+              candles={chartCandles}
               focusTimestamp={
                 manualMode ? undefined : currentCandidate?.endTimestamp
               }
@@ -510,6 +528,7 @@ export function LabelingWorkspace() {
                   : currentCandidate?.keyPriceLevels.takeProfit
               }
               onCandleClick={manualMode ? handleCandleClick : undefined}
+              onLoadMore={handleLoadMore}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">

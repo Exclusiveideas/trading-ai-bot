@@ -6,6 +6,14 @@ import { findAllCandidates } from "@/lib/pipeline/patterns/candidate-finder";
 import type { EnrichedDetectorCandle } from "@/lib/pipeline/patterns/candidate-finder";
 import { calculateOutcome } from "@/lib/pipeline/outcome-calculator";
 
+const VALID_PATTERN_TYPES: Set<string> = new Set([
+  "pin_bar",
+  "double_top",
+  "double_bottom",
+  "head_and_shoulders",
+  "false_breakout",
+]);
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const pair = searchParams.get("pair");
@@ -17,9 +25,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const patternTypeFilter = searchParams.get(
-    "patternType",
-  ) as PatternType | null;
+  const rawPatternType = searchParams.get("patternType");
+  if (rawPatternType && !VALID_PATTERN_TYPES.has(rawPatternType)) {
+    return NextResponse.json(
+      { error: "Invalid patternType parameter" },
+      { status: 400 },
+    );
+  }
+  const patternTypeFilter = rawPatternType as PatternType | null;
 
   const candles = await prisma.rawCandle.findMany({
     where: { pair },
@@ -49,13 +62,13 @@ export async function GET(request: NextRequest) {
     candidates = candidates.filter((c) => c.patternType === patternTypeFilter);
   }
 
-  const withOutcomes = candidates.map((candidate) => {
-    const outcomeCandles = candles.map((c) => ({
-      high: c.high,
-      low: c.low,
-      close: c.close,
-    }));
+  const outcomeCandles = candles.map((c) => ({
+    high: c.high,
+    low: c.low,
+    close: c.close,
+  }));
 
+  const withOutcomes = candidates.map((candidate) => {
     const outcome = calculateOutcome(outcomeCandles, {
       entryPrice: candidate.keyPriceLevels.entry,
       stopLoss: candidate.keyPriceLevels.stopLoss,

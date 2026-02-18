@@ -90,12 +90,14 @@ export function ChartPanel({
       },
       rightPriceScale: {
         borderColor: colors.border,
+        autoScale: true,
+        scaleMargins: { top: 0.1, bottom: 0.1 },
       },
       timeScale: {
         borderColor: colors.border,
         timeVisible: false,
         barSpacing: 12,
-        minBarSpacing: 6,
+        minBarSpacing: 8,
       },
     });
 
@@ -111,35 +113,44 @@ export function ChartPanel({
     });
     candleSeriesRef.current = candleSeries;
 
+    const indicatorScaleId = "indicators";
+
     const sma20Series = chart.addSeries(LineSeries, {
       color: "#3b82f6",
       lineWidth: 1,
       title: "SMA20",
+      priceScaleId: indicatorScaleId,
     });
 
     const sma50Series = chart.addSeries(LineSeries, {
       color: "#f59e0b",
       lineWidth: 1,
       title: "SMA50",
+      priceScaleId: indicatorScaleId,
     });
 
     const ema200Series = chart.addSeries(LineSeries, {
       color: "#a855f7",
       lineWidth: 1,
       title: "EMA200",
+      priceScaleId: indicatorScaleId,
     });
 
     const bbUpperSeries = chart.addSeries(LineSeries, {
       color: colors.bbColor,
       lineWidth: 1,
       lineStyle: 2,
+      priceScaleId: indicatorScaleId,
     });
 
     const bbLowerSeries = chart.addSeries(LineSeries, {
       color: colors.bbColor,
       lineWidth: 1,
       lineStyle: 2,
+      priceScaleId: indicatorScaleId,
     });
+
+    chart.priceScale(indicatorScaleId).applyOptions({ visible: false });
 
     const candleChartData: CandlestickData[] = candles.map((c) => ({
       time: toChartTime(c.timestamp),

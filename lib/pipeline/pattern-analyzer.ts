@@ -787,10 +787,22 @@ function analyzeHeadAndShoulders(
 
   const startIdx = candidate.startIndex;
   const endIdx = candidate.endIndex;
-  const headIdx = Math.round((startIdx + endIdx) / 2);
+  const headAnchor = candidate.keyPriceLevels.anchorPrices.find(
+    (a) => a.label === "head",
+  );
+  let resolvedHeadIdx = Math.round((startIdx + endIdx) / 2);
+  if (headAnchor) {
+    for (let i = startIdx; i <= endIdx; i++) {
+      const price = direction === "bearish" ? candles[i].high : candles[i].low;
+      if (price === headAnchor.price) {
+        resolvedHeadIdx = i;
+        break;
+      }
+    }
+  }
   const leftCandle = candles[startIdx];
   const endCandle = candles[endIdx];
-  const headCandle = candles[Math.min(headIdx, candles.length - 1)];
+  const headCandle = candles[Math.min(resolvedHeadIdx, candles.length - 1)];
   const atr = safeAtr(endCandle);
   const neckline = candidate.keyPriceLevels.entry;
 
@@ -856,8 +868,8 @@ function analyzeHeadAndShoulders(
     notes.push(`▼ Small pattern (${heightAtr.toFixed(1)}x ATR)`);
   }
 
-  const leftDuration = headIdx - startIdx;
-  const rightDuration = endIdx - headIdx;
+  const leftDuration = resolvedHeadIdx - startIdx;
+  const rightDuration = endIdx - resolvedHeadIdx;
   if (leftDuration > 0 && rightDuration > 0) {
     const timeRatio = rightDuration / leftDuration;
     if (timeRatio >= 0.7 && timeRatio <= 1.3) {

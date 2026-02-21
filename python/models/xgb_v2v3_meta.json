@@ -106,8 +106,8 @@
     "htf_h1_trend_state_weak_uptrend"
   ],
   "n_features": 104,
-  "train_size": 73173,
-  "test_size": 18294,
+  "train_size": 77252,
+  "test_size": 19313,
   "mfe_bucket_edges": [
     0,
     0.5,

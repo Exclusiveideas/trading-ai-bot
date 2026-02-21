@@ -8,27 +8,72 @@
 Building a Context-Aware Machine Learning Trading System
 
 **Timeline:** 9-12 months to live trading
-**Patterns:** Pin Bars, Head & Shoulders, Double Tops/Bottoms, False Breakouts
-**Technology Stack:** JavaScript + Python + XGBoost
+**Patterns:** Pin Bars, Head & Shoulders, Double Tops/Bottoms, False Breakouts, Engulfing
+**Technology Stack:** JavaScript/TypeScript + Python + XGBoost + Next.js + PostgreSQL + OANDA v20 API
+**Pairs:** 20 forex pairs (EUR/USD, GBP/USD, USD/JPY, AUD/USD, EUR/GBP, USD/CAD, NZD/USD, USD/CHF, EUR/JPY, GBP/JPY, EUR/AUD, AUD/JPY, GBP/CHF, EUR/CHF, CAD/JPY, NZD/JPY, EUR/NZD, GBP/AUD, AUD/NZD, CHF/JPY)
+**Timeframes:** D, H4, H1, M15
 
 *Created: February 11, 2026*
-*Updated: February 19, 2026 — Added V2 (Multi-R Classification) and V3 (MFE Regression) model evolution path*
+*Updated: February 21, 2026 — Updated after H1 backfill, re-labeling, and model retraining*
+
+---
+
+## PROGRESS OVERVIEW
+
+| Phase | Status | Key Results |
+|---|---|---|
+| Phase 1: Foundation | COMPLETE | Node.js + Python + PostgreSQL + OANDA API |
+| Phase 2: Data Pipeline | COMPLETE | 9.73M candles, 20 pairs, 4 timeframes, 15 years of data |
+| Phase 3: Labeling Tool | COMPLETE | Next.js UI + automated batch labeling + enriched CSV export (85 columns) |
+| Phase 4: Pattern Labeling | COMPLETE | 103,958 labels across 5 pattern types (massively exceeded 200-300 target) |
+| Phase 5: V1 Model | COMPLETE | AUC-ROC 0.704, accuracy 63.5% |
+| Phase 6: V2 Multi-Class | COMPLETE | Filtered strategy: +4,506R total, 0.389R/trade avg |
+| Phase 6B: V3 Regression | COMPLETE | R² = 0.394, MAE = 0.635R |
+| Phase 7: All Pattern Types | COMPLETE | All 5 types done (exceeded original 2-type target) |
+| Phase 8: Production Scanner | NOT STARTED | Next up |
+| Phase 9: Paper Trading | NOT STARTED | |
+| Phase 10: Live Trading | NOT STARTED | |
+
+### Database State
+
+| Table | Rows |
+|---|---|
+| raw_candles | 9,733,231 |
+| calculated_features | 9,733,231 |
+| context_features | 9,733,231 |
+| labeled_patterns | 103,958 |
+
+### Model Performance
+
+| Model | Key Metric | Value |
+|---|---|---|
+| V1b Binary Classifier | AUC-ROC | 0.704 |
+| V1b Binary Classifier | Accuracy | 63.5% |
+| V2 Multi-Class (Filtered) | Total R | +4,506R |
+| V2 Multi-Class (Filtered) | Avg R/Trade | 0.389R |
+| V2 Multi-Class (Filtered) | Max Drawdown | -49R |
+| V3 MFE Regression | R² | 0.394 |
+| V3 MFE Regression | MAE | 0.635R |
+
+Top learned features: pattern_type_false_breakout, trend_alignment, risk_reward_ratio, dist_to_round_number_pips, trading_session_daily
+
+Best strategy: V2 Filtered — takes 60% of trades (predicted >=1R MFE), +4,506R total, 0.389R avg/trade, -49R max drawdown.
 
 ---
 
 ## TABLE OF CONTENTS
 
-- [Phase 1: Foundation Setup — Week 1](#phase-1-foundation-setup)
-- [Phase 2: Data Pipeline — Week 2-3](#phase-2-data-pipeline)
-- [Phase 3: Labeling Tool & Automation — Week 4-5](#phase-3-labeling-tool--automation)
-- [Phase 4: Pattern Labeling (Semi-Automated) — Week 6-10](#phase-4-pattern-labeling-semi-automated)
-- [Phase 5: Model Training V1 — Week 11-12](#phase-5-model-training-v1)
-- [Phase 6: Iteration & Improvement — Week 13-15](#phase-6-iteration--improvement)
-- [Phase 6B: MFE Regression Model (V3) — Week 16-17](#phase-6b-mfe-regression-model-v3)
-- [Phase 7: Second Setup Type — Week 18-20](#phase-7-second-setup-type)
-- [Phase 8: Production Scanner — Week 21-23](#phase-8-production-scanner)
-- [Phase 9: Paper Trading — Week 24-36 (~3 months)](#phase-9-paper-trading)
-- [Phase 10: Live Trading — Month 10+](#phase-10-live-trading)
+- [Phase 1: Foundation Setup — COMPLETE](#phase-1-foundation-setup)
+- [Phase 2: Data Pipeline — COMPLETE](#phase-2-data-pipeline)
+- [Phase 3: Labeling Tool & Automation — COMPLETE](#phase-3-labeling-tool--automation)
+- [Phase 4: Pattern Labeling — COMPLETE](#phase-4-pattern-labeling)
+- [Phase 5: Model Training V1 — COMPLETE](#phase-5-model-training-v1)
+- [Phase 6: V2 Multi-Class — COMPLETE](#phase-6-v2-multi-class)
+- [Phase 6B: V3 MFE Regression — COMPLETE](#phase-6b-mfe-regression-model-v3)
+- [Phase 7: All Pattern Types — COMPLETE](#phase-7-all-pattern-types)
+- [Phase 8: Production Scanner — NEXT](#phase-8-production-scanner)
+- [Phase 9: Paper Trading](#phase-9-paper-trading)
+- [Phase 10: Live Trading](#phase-10-live-trading)
 - [Milestones & Checkpoints](#milestones--checkpoints)
 - [Model Evolution Strategy (V1 → V2 → V3)](#model-evolution-strategy)
 - [Critical Success Factors](#critical-success-factors)
@@ -37,487 +82,125 @@ Building a Context-Aware Machine Learning Trading System
 
 ---
 
-## PHASE 1: FOUNDATION SETUP
+## PHASE 1: FOUNDATION SETUP — COMPLETE
 
-**Week 1 | Goal: Get all tools and infrastructure ready**
+**Completed | All infrastructure operational**
 
-### Task 1.1: Development Environment Setup
-
-**What to do:**
-- Install Node.js (v18+) and Python (3.10+)
-- Set up code editor (VS Code recommended)
-- Create project folder structure
-- Install Python virtual environment
-- Install key Python libraries: pandas, xgboost, scikit-learn, jupyter
-
-**Deliverable:** Working dev environment where you can run both JS and Python
-
-*Success check: Can run 'node --version' and 'python --version' successfully*
-
-### Task 1.2: Data Source Selection
-
-**What to do:**
-- Sign up for Alpha Vantage API (or Oanda practice account)
-- Get API credentials
-- Test API access with a single request
-- Choose 2 currency pairs to start (recommended: EUR/USD, GBP/USD)
-
-**Deliverable:** Working API key, can fetch sample data
-
-*Success check: Successfully retrieve 1 day of historical price data*
-
-### Task 1.3: Database Setup
-
-**What to do:**
-- Choose storage: SQLite (easiest) or PostgreSQL (production-ready)
-- Design schema for: raw OHLCV data, calculated features, labeled patterns
-- Create tables
-- Test insert/query operations
-
-**Deliverable:** Database ready to store historical data
-
-*Success check: Can store and retrieve a week of price data*
+### Actual Results
+- Node.js 18+ and Python 3.10+ installed
+- Next.js 15 app with App Router (TypeScript)
+- PostgreSQL database with Prisma ORM
+- OANDA v20 API for data (migrated from Alpha Vantage/Twelve Data for accurate forex OHLC)
+- Python environment with pandas, xgboost, scikit-learn, jupyter, matplotlib, seaborn
+- 20 forex pairs configured (expanded from original 2-pair target)
+- 4 timeframes: D, H4, H1, M15
 
 ---
 
-## PHASE 2: DATA PIPELINE
+## PHASE 2: DATA PIPELINE — COMPLETE
 
-**Week 2-3 | Goal: Automated system to collect and process market data**
+**Completed | 9.18M candles across 20 pairs and 4 timeframes**
 
-### Task 2.1: Historical Data Collector
+### Actual Results
+- **Data source:** OANDA v20 API (15 years of historical data)
+- **Raw candles:** 9,733,231 rows in `raw_candles` table
+- **Technical indicators:** 9,733,231 rows in `calculated_features` (SMA 20/50, EMA 200, RSI 14, MACD, ADX 14, ATR 14, Bollinger Bands 20/2, Volume SMA 20)
+- **Context features:** 9,733,231 rows in `context_features` (support/resistance levels, trend state, trading session, round number proximity, distance metrics in pips and ATR)
+- **Trading session distribution:** Asian 3.02M | New York 3.04M | London 1.87M | Off-hours 1.16M | Daily 82K
+- **H1 gaps backfilled:** EUR/AUD, EUR/CHF, GBP/CHF, GBP/JPY, AUD/JPY, CAD/JPY, EUR/JPY — all 20 pairs now have full H1 coverage
 
-**What to do:**
-- Build Node.js script to fetch historical data from API
-- Fetch 3-5 years of daily data for your chosen pairs
-- Handle rate limiting (API call delays)
-- Store raw OHLCV in database
-- Add error handling and retry logic
-
-**Deliverable:** Database filled with 3-5 years of clean historical data
-
-*Success check: 1000+ daily candles per pair stored successfully*
-
-### Task 2.2: Technical Indicator Calculator
-
-**What to do:**
-- Install technicalindicators library in Node.js
-- Create script to calculate ALL indicators for each candle:
-  - Moving averages (SMA 20/50, EMA 200)
-  - RSI, MACD, ADX
-  - ATR, Bollinger Bands
-  - Volume metrics
-- Update database with calculated values
-
-**Deliverable:** Every candle has 15-20 technical indicator values
-
-*Success check: Can query any date and see complete indicator set*
-
-### Task 2.3: Context Feature Engineering
-
-**What to do:**
-- Build functions to identify support/resistance levels
-- Calculate distance to key levels (in pips and ATR-normalized)
-- Determine trend state (strong up/down, weak up/down, ranging)
-- Identify trading session for each candle
-- Calculate support/resistance quality scores
-- Detect round number proximity
-- Add all context features to database
-
-**Deliverable:** Rich context data for every candle
-
-*Success check: Can look at any candle and see: trend state, nearest support, session, volatility regime, etc.*
+### Pipeline Scripts
+- `scripts/collect-historical-data.ts` — fetches OANDA candles with resume capability
+- `scripts/calculate-indicators.ts` — computes all technical indicators
+- `scripts/calculate-context-features.ts` — computes market context features
+- `scripts/backfill-trading-session.ts` — one-time session classification backfill
 
 ---
 
-## PHASE 3: LABELING TOOL & AUTOMATION
+## PHASE 3: LABELING TOOL & AUTOMATION — COMPLETE
 
-**Week 4-5 | Goal: Visual interface + automated candidate finder**
+**Completed | Visual UI + batch labeling + enriched 85-column export**
 
-### Task 3.1: Chart Visualization
-
-**What to do:**
-- Build React/Next.js app with chart component
-- Use Lightweight Charts library or similar
-- Display candlestick data with scrolling/zoom
-- Show technical indicators as overlays
-- Add date range selector
-
-**Deliverable:** Working chart that displays your historical data beautifully
-
-*Success check: Can view and navigate 5 years of EUR/USD daily data*
-
-### Task 3.2: Pattern Marking Interface
-
-**What to do:**
-- Add click-to-mark functionality on chart
-- Create workflow: click start → click end → auto-calculate outcome
-- Build form to capture:
-  - Pattern type (pin bar, H&S, double top, etc.)
-  - All context at pattern formation (auto-filled from database)
-  - Manual quality rating (1-10)
-  - Notes field
-- Auto-calculate: entry price, stop loss, take profit, outcome
-
-**Deliverable:** Can mark patterns visually and save to database
-
-*Success check: Mark 10 test patterns and verify they save correctly*
-
-### Task 3.3: Outcome Calculator
-
-**What to do:**
-- Build logic to scan forward after pattern marked
-- Detect if stop hit or target hit (which came first)
-- Calculate R-multiple achieved
-- Count bars to outcome
-- **Track Max Favorable Excursion (MFE)** — the furthest price moves in your favor (in R units) before the trade resolves. This is critical for V2/V3 model training.
-- Handle edge cases (pattern at end of data, neither target nor stop hit, both hit on same bar)
-
-**Deliverable:** Automatic outcome calculation with MFE tracking for every pattern
-
-*Success check: Mark a pattern, system correctly identifies win/loss, R-multiple, and MFE*
-
-### Task 3.4: Automated Candidate Finder
-
-**What to do:**
-- Build rule-based pattern detection algorithm (intentionally loose criteria)
-- For pin bars: detect long wicks (>60%), small bodies (<35%)
-- For other patterns: build similar simple detectors
-- Scan historical data and flag 80-120 candidates
-- Pre-calculate context for each candidate
-- Display only candidates in review interface (not all 1000 candles)
-
-**Deliverable:** Automated scanner that finds pattern candidates in seconds
-
-*Success check: Scan 1000 candles, flag 80-120 candidates in <5 seconds*
-
-### Task 3.5: Export Functionality
-
-**What to do:**
-- Create enriched CSV export function
-- Include all 47 columns: label fields + OHLCV + technical indicators + context features + derived ratios + MFE
-- Derived features computed at export: body_ratio, tail_ratio, nose_ratio, range_atr_ratio, risk_reward_ratio
-- Ensure proper formatting for Python import
-- Add export button to interface (per-pair and export-all)
-
-**Deliverable:** One-click export of all labeled data to enriched CSV
-
-*Success check: Export labels, open in Excel, verify all 47 columns present with indicator data populated*
+### Actual Results
+- **Chart UI:** Next.js app with candlestick visualization, scrolling/zoom, indicator overlays
+- **Pattern marking:** Click-to-mark with auto-calculated entry/SL/TP/outcome/MFE
+- **Automated candidate finder:** Rule-based detectors for all 5 pattern types with quality scoring, ATR filters, and volume analysis
+- **Batch labeling:** `scripts/batch-label.ts` — fully automated labeling across all pairs/timeframes with deduplication
+- **Export:** `/api/export` endpoint producing 85-column CSV with:
+  - Label fields + OHLCV + technical indicators + context features
+  - Multi-timeframe context (33 HTF columns): H4→D, H1→D+H4, M15→D+H4+H1
+  - Derived features: trend_alignment, volatility_regime, bb_width, rsi_zone
+  - HTF fill rates: H4→D 96%, H1→D 85%, H1→H4 98%, M15→D 50%, M15→H4 91%
 
 ---
 
-## PHASE 4: PATTERN LABELING (SEMI-AUTOMATED)
+## PHASE 4: PATTERN LABELING — COMPLETE
 
-**Week 6-10 | Goal: Create high-quality training dataset efficiently**
+**Completed | 98,406 labels across 5 pattern types (massively exceeded 200-300 target)**
 
-### Task 4.1: Choose Your First Setup Type
-
-**What to do:**
-- Pick ONE pattern type to start (recommended: Pin Bars)
-- Study pattern definition thoroughly
-- Decide strict criteria (what qualifies as a valid pattern)
-- Write down your rules in a document
-
-**Deliverable:** Clear definition document for your chosen pattern
-
-*Success check: Can explain to someone what makes a valid pin bar vs invalid*
-
-### Task 4.2: Label First 50 Examples (Semi-Automated)
-
-**What to do:**
-- Run automated candidate finder on historical data (finds 80-120 candidates)
-- Review ONLY the flagged candidates (not all 1000 candles)
-- For each candidate:
-  - Look at pre-zoomed chart
-  - Decide: Valid pattern? [APPROVE] or [REJECT]
-  - If approved: Rate quality (1-10)
-  - System auto-calculates context, outcome, and MFE
-- Keep best 50 from the 80-120 candidates
-
-**Deliverable:** 50 high-quality labeled patterns with outcomes and MFE data
-
-*Time estimate: 45-60 minutes (30-45 seconds per review, 70% time savings)*
-
-*Success check: Have at least 20 wins and 20 losses (need both outcomes)*
-
-### Task 4.3: Quality Review & Refinement
-
-**What to do:**
-- Review your first 50 approved labels
-- Check for consistency in quality ratings
-- Remove any you're uncertain about
-- Identify which contexts led to wins vs losses
-- Refine automated finder rules if needed (adjust thresholds)
-
-**Deliverable:** Clean set of 40-50 high-confidence labels
-
-*Success check: Win rate is between 40-70% (not too perfect, not too random)*
-
-### Task 4.4: Label to 100-150 Total (Semi-Automated)
-
-**What to do:**
-- Run candidate finder on additional historical periods
-- Continue reviewing flagged candidates with refined criteria
-- Aim for variety in context conditions
-- Ensure you have examples across different:
-  - Trend states
-  - Sessions
-  - Volatility regimes
-  - Support quality levels
-- Track your labeling stats and approval rate
-
-**Deliverable:** 100-150 labeled patterns
-
-*Time estimate: 2-4 hours total (70% faster than manual)*
-
-*Success check: Roughly balanced distribution of context conditions*
+### Actual Results
+- **Total labeled patterns:** 103,958 (vs. original target of 200-300)
+- **Pattern types:** Pin Bars, Head & Shoulders (573 labels, up from 1), Double Tops/Bottoms, False Breakouts (9,336 labels, up from 704), Engulfing
+- **Coverage:** 20 forex pairs × 4 timeframes
+- **Quality:** Automated quality scoring with pattern-specific validation rules
+- **Exported dataset:** 103,958 rows × 85 columns (137MB CSV)
 
 ---
 
-## PHASE 5: MODEL TRAINING V1
+## PHASE 5: MODEL TRAINING V1 — COMPLETE
 
-**Week 11-12 | Goal: Train first working binary classification model**
+**Completed | AUC-ROC 0.704, accuracy 63.9%**
 
-> **V1 Approach:** Binary classification — "Will this fixed-2R trade win or lose?"
-> Uses 195+ pin bar labels with 47 feature columns including MFE.
-> MFE is included as a training feature in V1 only for feature importance analysis — it will NOT be available at prediction time (since MFE is only known after the trade). It helps identify which patterns have high movement potential.
-
-### Task 5.1: Learn Python Basics
-
-**What to do:**
-- Complete 'Python for JavaScript Developers' tutorial (search online)
-- Focus on: variables, functions, loops, importing libraries
-- Learn pandas basics (reading CSV, selecting columns, filtering rows)
-- Don't overthink it — you only need fundamentals
-
-**Deliverable:** Comfortable reading/writing basic Python
-
-*Time estimate: 8-12 hours*
-
-*Success check: Can load a CSV and print first 10 rows in Python*
-
-### Task 5.2: First Training Script
-
-**What to do:**
-- Create Jupyter notebook or .py file
-- Load your labeled CSV into pandas
-- Separate features (X) from target (y = win/loss at 2R)
-- **Important:** Exclude MFE and outcome-derived columns from training features (they're future-leaking). Use them only for analysis.
-- Split into train/test (80/20 time-based split — never shuffle time-series)
-- Train simple XGBoost classifier
-- Evaluate accuracy
-
-**Deliverable:** Working training script that produces accuracy score
-
-*Success check: Test accuracy above 55% (better than random)*
-
-### Task 5.3: Feature Importance Analysis
-
-**What to do:**
-- Extract feature importances from trained model
-- Create visualization (bar chart)
-- Identify top 10 most important features
-- Check if they make intuitive sense
-- **Analyze MFE distribution:** Plot MFE by win/loss, by quality rating, by context. This informs V2/V3 development.
-- Document findings
-
-**Deliverable:** Report showing which features matter most + MFE distribution analysis
-
-*Success check: Context features (trend, support quality) rank highly*
-
-### Task 5.4: Context Performance Analysis
-
-**What to do:**
-- Group test results by context conditions
-- Calculate win rate for:
-  - Each trend alignment type
-  - Each session
-  - Support quality buckets
-  - Combined high-quality contexts
-- Compare actual vs predicted probabilities
-- **Analyze MFE by context:** Which contexts produce the largest favorable excursions? This identifies where V3 regression will add the most value.
-
-**Deliverable:** Report showing model performance by context + MFE context analysis
-
-*Success check: Model predictions match reality (70% prediction ≈ 70% actual)*
+### Actual Results
+- **Model:** XGBoost binary classifier (V1b)
+- **Training data:** 104K labels (87x the original 1.2K)
+- **AUC-ROC:** 0.704 (up from 0.51 random baseline)
+- **Accuracy:** 63.5%
+- **Top features:** pattern_type_false_breakout, trend_alignment, risk_reward_ratio, dist_to_round_number_pips, trading_session_daily
+- **Notebook:** `python/notebooks/phase5_model_training_v1.ipynb`
 
 ---
 
-## PHASE 6: ITERATION & IMPROVEMENT
+## PHASE 6: V2 MULTI-CLASS — COMPLETE
 
-**Week 13-15 | Goal: Improve model to 65%+ accuracy, evolve to V2 multi-R classification**
+**Completed | Best strategy: +4,290R total, 0.390R/trade**
 
-### Task 6.1: Error Analysis
-
-**What to do:**
-- Review all false positives (predicted win, actual loss)
-- Review all false negatives (predicted loss, actual win)
-- Look for patterns in mistakes
-- Identify missing features or mislabeled data
-- **Analyze MFE of misclassified trades:** Did false negatives have high MFE (price moved favorably but didn't reach 2R)? This suggests variable TP would have won.
-
-**Deliverable:** List of insights on why model fails + MFE analysis of errors
-
-*Success check: Find at least 3 clear patterns in failures*
-
-### Task 6.2: Add More Labels (Target: 200-300)
-
-**What to do:**
-- Run candidate finder on additional data or different pairs
-- Label 100+ more examples using semi-automated workflow
-- Focus on scenarios where model struggled
-- Ensure diverse contexts represented
-- Maintain label quality standards
-- **All new labels automatically include MFE** (already tracked by outcome calculator)
-
-**Deliverable:** 200-300 total labeled patterns with MFE data
-
-*Time estimate: 2-4 additional hours (semi-automated)*
-
-*Success check: Dataset has good coverage of edge cases*
-
-### Task 6.3: Feature Engineering Improvements
-
-**What to do:**
-- Based on error analysis, add new features
-- Examples:
-  - Interaction features (support_quality x trend_alignment)
-  - Ratio features (current_ATR / 90day_avg_ATR)
-  - Rolling statistics (win rate of last 10 patterns)
-- Re-calculate features for all data
-
-**Deliverable:** Enhanced feature set
-
-*Success check: 5-10 new meaningful features added*
-
-### Task 6.4: Model Retraining & Tuning (V2: Multi-R Classification)
-
-**What to do:**
-- Retrain on expanded dataset
-- **V2 Evolution:** Instead of binary win/loss at fixed 2R, train a multi-class classifier:
-  - Classes: `[loss, 1R, 1.5R, 2R, 3R+]` based on actual MFE data
-  - Use MFE buckets as labels: MFE < 1 = loss, 1 <= MFE < 1.5 = 1R, etc.
-  - This tells you not just IF a trade will win, but HOW FAR price is likely to move
-- Experiment with hyperparameters:
-  - max_depth (try 3, 5, 7)
-  - learning_rate (try 0.01, 0.05, 0.1)
-  - n_estimators (try 100, 200, 300)
-- Use cross-validation to find best settings
-- Compare V2 multi-class to V1 binary baseline
-
-**Deliverable:** V2 model with multi-R-target classification
-
-*Success check: V2 accuracy improves 3-5% over V1; MFE bucket predictions are meaningful*
+### Actual Results
+- **Model:** XGBoost multi-class classifier predicting MFE R-buckets
+- **Filtered strategy:** Takes 60% of trades (predicted >=1R MFE)
+  - Total R: +4,506R
+  - Avg R/trade: 0.389R
+  - Max drawdown: -49R
+- **Notebook:** `python/notebooks/phase6_model_v2v3_mfe.ipynb`
 
 ---
 
-## PHASE 6B: MFE REGRESSION MODEL (V3)
+## PHASE 6B: MFE REGRESSION MODEL (V3) — COMPLETE
 
-**Week 16-17 | Goal: Train regression model to predict optimal take-profit levels**
+**Completed | R² = 0.388, MAE = 0.637R**
 
-> **Prerequisites:** 500+ labeled patterns with MFE data. If you don't have enough labels yet, continue labeling in Phase 7 and return to this phase when ready.
+### Actual Results
+- **Model:** XGBoost regressor predicting continuous MFE values
+- **R²:** 0.388 (meaningful predictive power)
+- **MAE:** 0.637R
+- **Notebook:** `python/notebooks/phase6_model_v2v3_mfe.ipynb`
+- **Model files:** `python/models/`
 
-### Task 6B.1: MFE Data Analysis
-
-**What to do:**
-- Load all labeled data with MFE values
-- Analyze MFE distribution: mean, median, std dev, percentiles
-- Plot MFE vs each feature to identify correlations
-- Identify which features most strongly predict high MFE
-- Check if MFE distribution is normal or skewed (affects model choice)
-
-**Deliverable:** MFE statistical profile and feature correlation report
-
-*Success check: Can identify 5+ features that correlate with MFE > 2.0*
-
-### Task 6B.2: Train MFE Regression Model
-
-**What to do:**
-- Create new training script for regression (not classification)
-- Target variable: MFE (continuous, in R units)
-- Use XGBoost regressor (or try LightGBM)
-- Features: same 47 columns minus outcome-derived fields
-- Time-based train/test split
-- Evaluate with MAE (Mean Absolute Error) and R-squared
-- Compare predicted MFE vs actual MFE scatter plot
-
-**Deliverable:** Working MFE regression model
-
-*Success check: R-squared > 0.3 (meaningful predictive power beyond random)*
-
-### Task 6B.3: Dynamic Take-Profit Strategy
-
-**What to do:**
-- Use predicted MFE to set dynamic TP levels:
-  - Conservative: TP = 70% of predicted MFE
-  - Moderate: TP = 80% of predicted MFE
-  - Aggressive: TP = 90% of predicted MFE
-- Backtest each strategy against fixed-2R approach
-- Calculate: win rate, average R, profit factor for each
-- Determine which percentile performs best
-
-**Deliverable:** Dynamic TP strategy with backtested performance comparison
-
-*Success check: Dynamic TP outperforms fixed-2R on profit factor*
-
-### Task 6B.4: Ensemble Decision System
-
-**What to do:**
-- Combine V1 classifier + V3 regressor into unified decision:
-  - V1 classifier says "take this trade" (probability > threshold)
-  - V3 regressor says "set TP at X pips" (based on predicted MFE)
-- Build decision logic:
-  - If classifier probability > 65% AND predicted MFE > 1.5R → strong signal
-  - Set TP = 80% of predicted MFE (or minimum 1.5R)
-  - Set SL as normal (pattern-defined)
-- Test ensemble vs individual models
-
-**Deliverable:** Combined classifier + regressor trading system
-
-*Success check: Ensemble produces higher profit factor than either model alone*
+### Remaining Work (Dynamic TP & Ensemble — deferred to Phase 8)
+- Task 6B.3: Dynamic TP strategy backtesting (conservative/moderate/aggressive)
+- Task 6B.4: Ensemble decision system combining V1 classifier + V3 regressor
 
 ---
 
-## PHASE 7: SECOND SETUP TYPE
+## PHASE 7: ALL PATTERN TYPES — COMPLETE
 
-**Week 18-20 | Goal: Add diversity to your signal generation**
+**Completed | All 5 pattern types implemented (exceeded original 2-type target)**
 
-### Task 7.1: Choose Second Pattern
-
-**What to do:**
-- Select complementary pattern (e.g., if did Pin Bars, now do Head & Shoulders)
-- Study pattern thoroughly
-- Define strict criteria
-- Decide if you'll train separate model or combined model (recommend separate)
-
-**Deliverable:** Definition document for second pattern
-
-### Task 7.2: Label Second Pattern (100+ examples)
-
-**What to do:**
-- Build/adapt candidate finder for second pattern type
-- Use same semi-automated labeling workflow
-- Apply same rigor to context capture
-- Aim for 100-150 labels
-- Track pattern-specific insights
-- **MFE is automatically captured** for all new labels
-
-**Deliverable:** 100-150 labels of second pattern type (with MFE)
-
-*Time estimate: 2-4 hours (semi-automated)*
-
-### Task 7.3: Train Second Model
-
-**What to do:**
-- Use same training approach as first pattern
-- May need different features (H&S has shoulder heights, pin bars don't)
-- Train V1 classifier first, then V2 multi-class if enough data
-- **If total labels across all patterns exceed 500:** Train V3 regression model for this pattern type too
-- Train, evaluate, iterate
-- Aim for 60%+ accuracy
-
-**Deliverable:** Second trained model (V1 classifier minimum, V2/V3 if data permits)
-
-*Success check: Both models performing at 60%+ on test data*
+### Actual Results
+- **Pattern types implemented:** Pin Bars, Head & Shoulders, Double Tops/Bottoms, False Breakouts, Engulfing
+- **All trained in a single combined model** (not separate per-type as originally planned)
+- **Pattern-specific detectors** with quality scoring, ATR filters, and volume analysis
+- **Pattern documentation:** `docs/patterns/` (per-type definitions and criteria)
 
 ---
 
@@ -738,49 +421,60 @@ Building a Context-Aware Machine Learning Trading System
 
 ## MILESTONES & CHECKPOINTS
 
-| Milestone | Target Date | Success Criteria |
+| Milestone | Status | Actual Result |
 |---|---|---|
-| Dev environment ready | End Week 1 | Can run JS and Python code |
-| 1000+ candles in database | End Week 3 | Clean historical data stored |
-| Labeling tool working | End Week 5 | Can mark and export patterns with MFE |
-| 100 patterns labeled | End Week 8 | First training dataset ready |
-| First model trained (V1) | End Week 12 | 60%+ test accuracy (binary classification) |
-| 200+ patterns labeled | End Week 15 | Expanded dataset with MFE |
-| Model V2 improved | End Week 16 | 65%+ accuracy, multi-R classification working |
-| **V3 MFE regression trained** | **End Week 17** | **R-squared > 0.3, dynamic TP backtested** |
-| Scanner operational | End Week 23 | Automatic pattern detection + dynamic TP |
-| 30 paper trades | End Month 6 | System validated with fake money |
-| **Dynamic TP vs Fixed TP compared** | **End Month 7** | **V3 dynamic TP outperforms fixed 2R** |
-| 60 paper trades | End Month 8 | Consistent performance |
-| Go live | Month 10+ | 3 months profitable paper trading |
+| Dev environment ready | DONE | Node.js + Python + PostgreSQL + OANDA |
+| 1000+ candles in database | DONE | 9,733,231 candles (9,733x target) |
+| Labeling tool working | DONE | Next.js UI + batch labeling + 85-column export |
+| 100 patterns labeled | DONE | 103,958 patterns (1,040x target) |
+| First model trained (V1) | DONE | AUC 0.704, accuracy 63.9% |
+| 200+ patterns labeled | DONE | 103,958 patterns |
+| Model V2 improved | DONE | +4,290R filtered strategy, 0.390R/trade |
+| V3 MFE regression trained | DONE | R² = 0.388, MAE = 0.637R |
+| All pattern types | DONE | 5 types (exceeded 2-type target) |
+| Scanner operational | NEXT | Phase 8 — real-time OANDA feed → model inference → alerts |
+| 30 paper trades | PENDING | Phase 9 |
+| Dynamic TP vs Fixed TP compared | PENDING | Phase 9 (A/B test during paper trading) |
+| 60 paper trades | PENDING | Phase 9 |
+| Go live | PENDING | Phase 10 |
+
+---
+
+## IMMEDIATE NEXT STEPS
+
+### Phase 8 Prerequisites
+- Dynamic TP strategy backtesting (deferred from Phase 6B)
+- Ensemble decision system (V1 classifier + V3 regressor)
+- FastAPI prediction server
+- Real-time OANDA feed integration
+
+### Maintenance
+- **Database backup** — `pg_dump trading_ai | gzip > trading_ai_backup.sql.gz` (last backup: Feb 21, 2026)
+- Re-run data collection + labeling periodically to keep models trained on recent data
 
 ---
 
 ## MODEL EVOLUTION STRATEGY
 
-The model evolves in three stages. Each stage builds on the previous one and requires more data:
+The model evolves in three stages. All three are now trained:
 
-### V1: Binary Classification (200+ labels)
+### V1: Binary Classification — TRAINED
 - **Question:** "Will this fixed-2R trade win or lose?"
 - **Target:** Binary (win/loss)
-- **TP Strategy:** Fixed at 2R for all trades
-- **When:** Phase 5 (first training)
-- **Data needed:** 200+ labels minimum
+- **Result:** AUC 0.704, accuracy 63.5% on 104K labels
+- **Model file:** `python/models/` (XGBoost)
 
-### V2: Multi-R Classification (300+ labels)
+### V2: Multi-R Classification — TRAINED
 - **Question:** "How far will price move in my favor?"
 - **Target:** Multi-class buckets `[loss, 1R, 1.5R, 2R, 3R+]` derived from MFE data
-- **TP Strategy:** Set TP based on predicted R-bucket (e.g., if model predicts 3R+, use 2.5R TP)
-- **When:** Phase 6 iteration (after error analysis)
-- **Data needed:** 300+ labels with MFE
+- **Result:** Filtered strategy +4,506R total, 0.389R/trade, -49R max drawdown
+- **Best use:** Take 60% of trades (predicted >=1R MFE)
 
-### V3: MFE Regression (500+ labels)
+### V3: MFE Regression — TRAINED
 - **Question:** "Exactly how many R will price move favorably?"
 - **Target:** Continuous MFE value (e.g., 2.37R)
-- **TP Strategy:** Dynamic — set TP at 80% of predicted MFE (configurable percentile)
-- **When:** Phase 6B (or whenever 500+ labels accumulated)
-- **Data needed:** 500+ labels with MFE
-- **Key insight:** MFE (Max Favorable Excursion) tracks the peak favorable price movement in R units before the trade resolves. This lets the model learn not just IF a trade will work, but HOW MUCH opportunity exists — enabling intelligent TP placement instead of fixed targets.
+- **Result:** R² = 0.394, MAE = 0.635R
+- **Next:** Backtest dynamic TP strategies (70%/80%/90% of predicted MFE)
 
 ### Why This Order Matters
 1. **Classification is forgiving** — works with small datasets, binary target is easy to learn
@@ -837,16 +531,37 @@ Every label you save builds toward V3 — no extra work needed
 
 ---
 
+## KEY FILES
+
+| File | Purpose |
+|---|---|
+| `scripts/collect-historical-data.ts` | Fetch OANDA candles with resume capability |
+| `scripts/calculate-indicators.ts` | Compute technical indicators for all candles |
+| `scripts/calculate-context-features.ts` | Compute market context features |
+| `scripts/batch-label.ts` | Automated pattern detection and labeling |
+| `scripts/backfill-trading-session.ts` | One-time session classification backfill |
+| `app/api/export/route.ts` | 85-column enriched CSV export with HTF + derived features |
+| `lib/pipeline/context-features.ts` | Session classification, pip distance, context calculations |
+| `lib/pipeline/indicators.ts` | Technical indicator calculation library |
+| `lib/oanda.ts` | OANDA v20 API client |
+| `types/trading.ts` | Forex pairs, timeframes, and type definitions |
+| `python/notebooks/phase5_model_training_v1.ipynb` | V1b binary classifier training |
+| `python/notebooks/phase6_model_v2v3_mfe.ipynb` | V2 multi-class + V3 regression training |
+| `python/models/` | Trained XGBoost model files |
+| `python/data/training-all.csv` | 98K × 85 column training data (gitignored) |
+| `docs/patterns/` | Pattern type definitions and detection criteria |
+
+---
+
 ## REALISTIC TIMELINE
 
 **Aggressive:** 6 months to live trading
 **Realistic:** 9-12 months to live trading
 **Conservative:** 12-18 months to consistent profitability
 
-### Your timeline depends on:
-- Hours per week available (10hrs = fast, 5hrs = slow)
-- JavaScript/coding comfort level
-- Discipline in labeling quality
-- Patience in paper trading phase
+### Actual Progress
+- Phases 1-7 + 6B completed in ~10 days (Feb 11-21, 2026)
+- Remaining: Phase 8 (scanner), Phase 9 (paper trading, ~3 months), Phase 10 (live)
+- Biggest bottleneck ahead: paper trading validation (minimum 60-90 days)
 
 *Remember: This is a marathon, not a sprint. The traders who succeed are the ones who stay disciplined, track everything meticulously, and refuse to skip the validation phases. Trust the process.*

@@ -50,3 +50,6 @@ __pycache__/
 .ipynb_checkpoints/
 
 /lib/generated/prisma
+
+# database backups
+*.sql.gz

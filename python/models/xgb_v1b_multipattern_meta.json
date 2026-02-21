@@ -106,11 +106,11 @@
     "htf_h1_trend_state_weak_uptrend"
   ],
   "n_features": 104,
-  "train_size": 73173,
-  "test_size": 18294,
+  "train_size": 77252,
+  "test_size": 19313,
   "class_balance": {
-    "loss": 59561,
-    "win": 31906
+    "loss": 63149,
+    "win": 33416
   },
-  "scale_pos_weight": 1.9864092727124316
+  "scale_pos_weight": 2.015653667486435
 }

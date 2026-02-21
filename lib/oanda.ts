@@ -140,6 +140,49 @@ export async function fetchCandles(
     }));
 }
 
+export async function fetchLatestCandles(
+  pair: string,
+  granularity: OandaGranularity,
+  count: number = 300,
+): Promise<Candle[]> {
+  const instrument = pairToInstrument(pair);
+
+  const params = new URLSearchParams({
+    granularity,
+    price: "M",
+    count: String(Math.min(count, MAX_CANDLES_PER_REQUEST)),
+  });
+
+  const url = `${BASE_URL}/instruments/${instrument}/candles?${params}`;
+  const response = await rateLimitedFetch(url);
+
+  if (response.status === 429) {
+    console.log("  Rate limited, waiting 60s...");
+    await new Promise((r) => setTimeout(r, 60000));
+    return fetchLatestCandles(pair, granularity, count);
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OANDA v20 API error ${response.status}: ${text}`);
+  }
+
+  const data: OandaCandlesResponse = await response.json();
+
+  return data.candles
+    .filter((c) => c.complete)
+    .map((c) => ({
+      pair,
+      timestamp: c.time,
+      open: parseFloat(c.mid.o),
+      high: parseFloat(c.mid.h),
+      low: parseFloat(c.mid.l),
+      close: parseFloat(c.mid.c),
+      volume: c.volume,
+      timeframe: granularity,
+    }));
+}
+
 export async function testConnection(): Promise<{
   success: boolean;
   message: string;

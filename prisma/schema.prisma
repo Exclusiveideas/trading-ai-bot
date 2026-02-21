@@ -96,3 +96,31 @@ model LabeledPattern {
   @@index([outcome])
   @@map("labeled_patterns")
 }
+
+model Signal {
+  id              Int       @id @default(autoincrement())
+  pair            String    @db.VarChar(20)
+  timeframe       String    @db.VarChar(10)
+  patternType     String    @map("pattern_type") @db.VarChar(30)
+  direction       String    @db.VarChar(10)
+  entryPrice      Float     @map("entry_price")
+  stopLoss        Float     @map("stop_loss")
+  takeProfit      Float     @map("take_profit")
+  patternStart    DateTime  @map("pattern_start") @db.Timestamptz(6)
+  patternEnd      DateTime  @map("pattern_end") @db.Timestamptz(6)
+  qualityRating   Int       @map("quality_rating")
+  confidence      Float
+  v1WinProb       Float?    @map("v1_win_prob")
+  v2MfeBucket     String?   @map("v2_mfe_bucket") @db.VarChar(20)
+  v2BucketProbs   Json?     @map("v2_bucket_probs")
+  v3MfePrediction Float?    @map("v3_mfe_prediction")
+  alertSent       Boolean   @default(false) @map("alert_sent")
+  alertSentAt     DateTime? @map("alert_sent_at") @db.Timestamptz(6)
+  featureVector   Json?     @map("feature_vector")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([pair, timeframe, patternType, patternEnd])
+  @@index([createdAt(sort: Desc)])
+  @@index([pair, timeframe])
+  @@map("signals")
+}

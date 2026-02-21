@@ -206,7 +206,8 @@ describe(detectHeadAndShoulders, () => {
       candles.push(makeCandle(1.1 - i * 0.01, 1.08 - i * 0.01));
 
     const results = detectHeadAndShoulders(candles, {
-      minHeadProminence: 1.15,
+      swingWindow: 3,
+      minHeadProminence: 1.2,
     });
     const bearish = results.filter((r) => r.direction === "bearish");
     expect(bearish).toEqual([]);

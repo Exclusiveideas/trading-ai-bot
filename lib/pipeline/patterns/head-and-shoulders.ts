@@ -10,13 +10,15 @@ export type HaSConfig = {
 };
 
 const DEFAULT_CONFIG: HaSConfig = {
-  swingWindow: 3,
-  shoulderTolerance: 0.02,
-  minPatternBars: 10,
-  maxPatternBars: 80,
+  swingWindow: 2,
+  shoulderTolerance: 0.08,
+  minPatternBars: 8,
+  maxPatternBars: 200,
   minHeadProminence: 0,
   maxNecklineSlope: Infinity,
 };
+
+const MAX_SWING_POINTS = 200;
 
 function findSwingHighIndices(
   candles: DetectorCandle[],
@@ -60,6 +62,30 @@ function findSwingLowIndices(
   return indices;
 }
 
+function topSwingHighs(
+  candles: DetectorCandle[],
+  indices: number[],
+  max: number,
+): number[] {
+  if (indices.length <= max) return indices;
+  return [...indices]
+    .sort((a, b) => candles[b].high - candles[a].high)
+    .slice(0, max)
+    .sort((a, b) => a - b);
+}
+
+function topSwingLows(
+  candles: DetectorCandle[],
+  indices: number[],
+  max: number,
+): number[] {
+  if (indices.length <= max) return indices;
+  return [...indices]
+    .sort((a, b) => candles[a].low - candles[b].low)
+    .slice(0, max)
+    .sort((a, b) => a - b);
+}
+
 export type HaSDetection = {
   startIndex: number;
   endIndex: number;
@@ -89,7 +115,11 @@ function findBearishHaS(
   candles: DetectorCandle[],
   cfg: HaSConfig,
 ): HaSDetection[] {
-  const swingHighs = findSwingHighIndices(candles, cfg.swingWindow);
+  const swingHighs = topSwingHighs(
+    candles,
+    findSwingHighIndices(candles, cfg.swingWindow),
+    MAX_SWING_POINTS,
+  );
   const swingLows = findSwingLowIndices(candles, cfg.swingWindow);
   const results: HaSDetection[] = [];
 
@@ -166,7 +196,11 @@ function findBullishHaS(
   candles: DetectorCandle[],
   cfg: HaSConfig,
 ): HaSDetection[] {
-  const swingLows = findSwingLowIndices(candles, cfg.swingWindow);
+  const swingLows = topSwingLows(
+    candles,
+    findSwingLowIndices(candles, cfg.swingWindow),
+    MAX_SWING_POINTS,
+  );
   const swingHighs = findSwingHighIndices(candles, cfg.swingWindow);
   const results: HaSDetection[] = [];
 

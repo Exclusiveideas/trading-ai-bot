@@ -10,7 +10,7 @@ const validCandle: Candle = {
   low: 1.093,
   close: 1.096,
   volume: 0,
-  timeframe: "1day",
+  timeframe: "D",
 };
 
 describe(computeDateChunks, () => {
@@ -62,20 +62,26 @@ describe(validateCandle, () => {
   });
 
   test("rejects candle where high < low", () => {
-    expect(
-      validateCandle({ ...validCandle, high: 1.09, low: 1.1 })
-    ).toBe(false);
+    expect(validateCandle({ ...validCandle, high: 1.09, low: 1.1 })).toBe(
+      false,
+    );
   });
 
   test("rejects candle where high < open", () => {
     expect(
-      validateCandle({ ...validCandle, open: 1.1, high: 1.09, low: 1.08, close: 1.085 })
+      validateCandle({
+        ...validCandle,
+        open: 1.1,
+        high: 1.09,
+        low: 1.08,
+        close: 1.085,
+      }),
     ).toBe(false);
   });
 
   test("rejects candle where low > close", () => {
     expect(
-      validateCandle({ ...validCandle, low: 1.1, close: 1.09, high: 1.12 })
+      validateCandle({ ...validCandle, low: 1.1, close: 1.09, high: 1.12 }),
     ).toBe(false);
   });
 
@@ -84,7 +90,9 @@ describe(validateCandle, () => {
   });
 
   test("rejects candle with invalid timestamp", () => {
-    expect(validateCandle({ ...validCandle, timestamp: "not-a-date" })).toBe(false);
+    expect(validateCandle({ ...validCandle, timestamp: "not-a-date" })).toBe(
+      false,
+    );
   });
 
   test("rejects candle with empty pair", () => {
@@ -112,7 +120,7 @@ describe(fetchWithRetry, () => {
         return Promise.resolve([validCandle]);
       },
       3,
-      10
+      10,
     );
     expect(result).toEqual([validCandle]);
     expect(attempt).toBe(3);
@@ -120,7 +128,11 @@ describe(fetchWithRetry, () => {
 
   test("throws after max retries exhausted", async () => {
     await expect(
-      fetchWithRetry(() => Promise.reject(new Error("persistent failure")), 2, 10)
+      fetchWithRetry(
+        () => Promise.reject(new Error("persistent failure")),
+        2,
+        10,
+      ),
     ).rejects.toThrow("persistent failure");
   });
 });

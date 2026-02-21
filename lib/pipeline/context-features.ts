@@ -180,8 +180,13 @@ export function findNearestLevels(
   return { support, resistance };
 }
 
-export function distanceInPips(price: number, level: number): number {
-  return Math.abs(price - level) * 10000;
+export function distanceInPips(
+  price: number,
+  level: number,
+  pair?: string,
+): number {
+  const multiplier = pair?.includes("JPY") ? 100 : 10000;
+  return Math.abs(price - level) * multiplier;
 }
 
 export function distanceInAtr(
@@ -215,8 +220,18 @@ export function classifyTrendState(
   return "ranging";
 }
 
-export function identifyTradingSession(timestamp: Date): TradingSession {
-  return "daily";
+export function identifyTradingSession(
+  timestamp: Date,
+  timeframe?: string,
+): TradingSession {
+  if (timeframe === "D") return "daily";
+
+  const hour = timestamp.getUTCHours();
+
+  if (hour >= 21) return "off_hours";
+  if (hour >= 13) return "new_york";
+  if (hour >= 8) return "london";
+  return "asian";
 }
 
 export function findNearestRoundNumber(price: number): number {

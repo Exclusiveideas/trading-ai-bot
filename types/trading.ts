@@ -4,6 +4,33 @@ export type RawCandleId = Brand<number, "RawCandleId">;
 export type CalculatedFeatureId = Brand<number, "CalculatedFeatureId">;
 export type ContextFeatureId = Brand<number, "ContextFeatureId">;
 
+export type OandaGranularity = "D" | "H4" | "H1" | "M15";
+
+export const FOREX_PAIRS = [
+  "EUR/USD",
+  "GBP/USD",
+  "USD/JPY",
+  "AUD/USD",
+  "EUR/GBP",
+  "USD/CAD",
+  "NZD/USD",
+  "USD/CHF",
+  "EUR/JPY",
+  "GBP/JPY",
+  "EUR/AUD",
+  "AUD/JPY",
+  "GBP/CHF",
+  "EUR/CHF",
+  "CAD/JPY",
+  "NZD/JPY",
+  "EUR/NZD",
+  "GBP/AUD",
+  "AUD/NZD",
+  "CHF/JPY",
+] as const;
+
+export const TIMEFRAMES: OandaGranularity[] = ["D", "H4", "H1", "M15"];
+
 export type Candle = {
   id?: RawCandleId;
   pair: string;
@@ -92,6 +119,7 @@ export type LabeledPattern = {
   support_quality: number | null;
   notes: string | null;
   context_json: Record<string, unknown> | null;
+  timeframe: string;
   created_at?: string;
 };
 
@@ -143,25 +171,5 @@ export type OutcomeResult = {
   rMultiple: number | null;
   barsToOutcome: number | null;
   exitPrice: number | null;
-};
-
-export type TwelveDataCandle = {
-  datetime: string;
-  open: string;
-  high: string;
-  low: string;
-  close: string;
-  volume: string;
-};
-
-export type TwelveDataResponse = {
-  meta: {
-    symbol: string;
-    interval: string;
-    currency_base: string;
-    currency_quote: string;
-    type: string;
-  };
-  values: TwelveDataCandle[];
-  status: string;
+  maxFavorableExcursion: number | null;
 };

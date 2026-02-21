@@ -13,7 +13,9 @@ import type {
   PatternCandidate,
   OutcomeResult,
   TrendState,
+  OandaGranularity,
 } from "@/types/trading";
+import { FOREX_PAIRS, TIMEFRAMES } from "@/types/trading";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -70,7 +72,13 @@ type CandidateWithOutcome = PatternCandidate & {
   analysis?: AnalysisData;
 };
 
-const PAIRS = ["EUR/USD", "GBP/USD"];
+const PAIRS: string[] = [...FOREX_PAIRS];
+const TIMEFRAME_LABELS: Record<OandaGranularity, string> = {
+  D: "Daily",
+  H4: "4 Hour",
+  H1: "1 Hour",
+  M15: "15 Min",
+};
 const ALL_PATTERNS_VALUE = "__all__";
 const PATTERN_TYPES: { value: string; label: string }[] = [
   { value: ALL_PATTERNS_VALUE, label: "All Patterns" },
@@ -86,6 +94,7 @@ const CHART_LOAD_MORE_SIZE = 50;
 
 export function LabelingWorkspace() {
   const [pair, setPair] = useState(PAIRS[0]);
+  const [timeframe, setTimeframe] = useState<OandaGranularity>("D");
   const [patternFilter, setPatternFilter] = useState("");
   const [candles, setCandles] = useState<CandleData[]>([]);
   const [candidates, setCandidates] = useState<CandidateWithOutcome[]>([]);
@@ -112,28 +121,39 @@ export function LabelingWorkspace() {
   const [rejectedCount, setRejectedCount] = useState(0);
   const [chartDisplayCount, setChartDisplayCount] = useState(CHART_WINDOW_SIZE);
   const playbackSavingRef = useRef(false);
+  const initialLoadRef = useRef(false);
 
-  const loadCandles = useCallback(async (selectedPair: string) => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/candles?pair=${encodeURIComponent(selectedPair)}`,
-      );
-      const data = await res.json();
-      const loadedCandles: CandleData[] = data.candles;
-      setCandles(loadedCandles);
-      setChartDisplayCount(CHART_WINDOW_SIZE);
-      setCandlesLoaded(true);
+  const loadCandles = useCallback(
+    async (selectedPair: string, selectedTimeframe: OandaGranularity) => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `/api/candles?pair=${encodeURIComponent(selectedPair)}&timeframe=${selectedTimeframe}`,
+        );
+        const data = await res.json();
+        const loadedCandles: CandleData[] = data.candles;
+        setCandles(loadedCandles);
+        setChartDisplayCount(CHART_WINDOW_SIZE);
+        setCandlesLoaded(true);
 
-      const labelsRes = await fetch(
-        `/api/labels?pair=${encodeURIComponent(selectedPair)}`,
-      );
-      const labelsData = await labelsRes.json();
-      setLabelCount(labelsData.labels.length);
-    } finally {
-      setLoading(false);
+        const labelsRes = await fetch(
+          `/api/labels?pair=${encodeURIComponent(selectedPair)}`,
+        );
+        const labelsData = await labelsRes.json();
+        setLabelCount(labelsData.labels.length);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!initialLoadRef.current) {
+      initialLoadRef.current = true;
+      loadCandles(pair, timeframe);
     }
-  }, []);
+  }, [loadCandles, pair, timeframe]);
 
   const chartWindowStart = Math.max(0, candles.length - chartDisplayCount);
 
@@ -151,9 +171,8 @@ export function LabelingWorkspace() {
     setPlaybackMode(false);
     setIsPlaying(false);
     try {
-      const url = patternFilter
-        ? `/api/candidates?pair=${encodeURIComponent(pair)}&patternType=${patternFilter}`
-        : `/api/candidates?pair=${encodeURIComponent(pair)}`;
+      let url = `/api/candidates?pair=${encodeURIComponent(pair)}&timeframe=${timeframe}`;
+      if (patternFilter) url += `&patternType=${patternFilter}`;
       const res = await fetch(url);
       const data = await res.json();
       setCandidates(data.candidates);
@@ -161,7 +180,7 @@ export function LabelingWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [pair, patternFilter]);
+  }, [pair, timeframe, patternFilter]);
 
   const runAnalysis = useCallback(async () => {
     setAnalyzing(true);
@@ -170,10 +189,11 @@ export function LabelingWorkspace() {
     setApprovedCount(0);
     setRejectedCount(0);
     try {
-      const url = patternFilter
-        ? `/api/analyze?pair=${encodeURIComponent(pair)}&patternType=${patternFilter}`
-        : `/api/analyze?pair=${encodeURIComponent(pair)}`;
-      const res = await fetch(url);
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pair, timeframe, candidates }),
+      });
       const data = await res.json();
       setCandidates(data.candidates);
       setCurrentIdx(0);
@@ -187,7 +207,7 @@ export function LabelingWorkspace() {
     } finally {
       setAnalyzing(false);
     }
-  }, [pair, patternFilter]);
+  }, [pair, candidates]);
 
   const handlePairChange = useCallback(
     (newPair: string) => {
@@ -198,9 +218,23 @@ export function LabelingWorkspace() {
       setChartDisplayCount(CHART_WINDOW_SIZE);
       setPlaybackMode(false);
       setIsPlaying(false);
-      loadCandles(newPair);
+      loadCandles(newPair, timeframe);
     },
-    [loadCandles],
+    [loadCandles, timeframe],
+  );
+
+  const handleTimeframeChange = useCallback(
+    (newTimeframe: OandaGranularity) => {
+      setTimeframe(newTimeframe);
+      setCandidates([]);
+      setCurrentIdx(0);
+      setCandlesLoaded(false);
+      setChartDisplayCount(CHART_WINDOW_SIZE);
+      setPlaybackMode(false);
+      setIsPlaying(false);
+      loadCandles(pair, newTimeframe);
+    },
+    [loadCandles, pair],
   );
 
   const currentCandidate = candidates[currentIdx] ?? null;
@@ -210,7 +244,7 @@ export function LabelingWorkspace() {
       candidate: CandidateWithOutcome,
       data: { qualityRating: number; notes: string },
     ) => {
-      await fetch("/api/labels", {
+      const res = await fetch("/api/labels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -224,14 +258,22 @@ export function LabelingWorkspace() {
           outcome: candidate.outcome.outcome,
           rMultiple: candidate.outcome.rMultiple,
           barsToOutcome: candidate.outcome.barsToOutcome,
+          maxFavorableExcursion: candidate.outcome.maxFavorableExcursion,
           qualityRating: data.qualityRating,
           trendState: candidate.contextSnapshot.trendState,
+          timeframe,
           session: "daily",
           supportQuality: null,
           notes: data.notes || null,
           contextJson: candidate.contextSnapshot,
         }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error ?? `Save failed (${res.status})`);
+      }
+      const result = await res.json();
+      return result.duplicate === true;
     },
     [],
   );
@@ -241,11 +283,19 @@ export function LabelingWorkspace() {
       if (!currentCandidate) return;
       setSaving(true);
       try {
-        await saveLabel(currentCandidate, data);
-        setLabelCount((c) => c + 1);
+        const isDuplicate = await saveLabel(currentCandidate, data);
+        if (isDuplicate) {
+          toast.info("Label already exists — skipping duplicate");
+        } else {
+          setLabelCount((c) => c + 1);
+        }
         if (currentIdx < candidates.length - 1) {
           setCurrentIdx((i) => i + 1);
         }
+      } catch (err) {
+        toast.error(
+          `Failed to save label: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
       } finally {
         setSaving(false);
       }
@@ -271,12 +321,18 @@ export function LabelingWorkspace() {
         if (analysis.approved) {
           playbackSavingRef.current = true;
           try {
-            await saveLabel(candidate, {
+            const isDuplicate = await saveLabel(candidate, {
               qualityRating: analysis.qualityRating,
               notes: analysis.notes,
             });
-            setLabelCount((c) => c + 1);
+            if (!isDuplicate) {
+              setLabelCount((c) => c + 1);
+            }
             setApprovedCount((c) => c + 1);
+          } catch (err) {
+            toast.error(
+              `Save failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+            );
           } finally {
             playbackSavingRef.current = false;
           }
@@ -349,7 +405,7 @@ export function LabelingWorkspace() {
           rsi: features?.rsi ?? null,
         };
 
-        await fetch("/api/labels", {
+        const res = await fetch("/api/labels", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -363,14 +419,22 @@ export function LabelingWorkspace() {
             outcome: outcome.outcome,
             rMultiple: outcome.rMultiple,
             barsToOutcome: outcome.barsToOutcome,
+            maxFavorableExcursion: outcome.maxFavorableExcursion,
             qualityRating: data.qualityRating,
             trendState: (contextSnapshot.trendState as TrendState) ?? null,
-            session: "daily",
+            timeframe,
+          session: "daily",
             supportQuality: null,
             notes: data.notes || null,
             contextJson: contextSnapshot,
           }),
         });
+        if (!res.ok) {
+          const err = await res
+            .json()
+            .catch(() => ({ error: "Unknown error" }));
+          throw new Error(err.error ?? `Save failed (${res.status})`);
+        }
         setLabelCount((c) => c + 1);
         setManualMode(false);
         setMarkStart(null);
@@ -395,6 +459,10 @@ export function LabelingWorkspace() {
 
   const handlePatternFilterChange = (value: string) => {
     setPatternFilter(value === ALL_PATTERNS_VALUE ? "" : value);
+    setCandidates([]);
+    setCurrentIdx(0);
+    setPlaybackMode(false);
+    setIsPlaying(false);
   };
 
   return (
@@ -408,6 +476,23 @@ export function LabelingWorkspace() {
             selected={pair}
             onSelect={handlePairChange}
           />
+          <Select
+            value={timeframe}
+            onValueChange={(v) =>
+              handleTimeframeChange(v as OandaGranularity)
+            }
+          >
+            <SelectTrigger className="w-[100px] h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TIMEFRAMES.map((tf) => (
+                <SelectItem key={tf} value={tf}>
+                  {TIMEFRAME_LABELS[tf]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select
             value={patternFilter || ALL_PATTERNS_VALUE}
             onValueChange={handlePatternFilterChange}
@@ -427,7 +512,7 @@ export function LabelingWorkspace() {
           {!candlesLoaded ? (
             <Button
               size="sm"
-              onClick={() => loadCandles(pair)}
+              onClick={() => loadCandles(pair, timeframe)}
               disabled={loading}
             >
               {loading ? (
@@ -455,7 +540,9 @@ export function LabelingWorkspace() {
                 size="sm"
                 variant="default"
                 onClick={runAnalysis}
-                disabled={loading || manualMode || analyzing}
+                disabled={
+                  loading || manualMode || analyzing || candidates.length === 0
+                }
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {analyzing ? (

@@ -9,10 +9,10 @@ export type DoubleTopConfig = {
 };
 
 const DEFAULT_CONFIG: DoubleTopConfig = {
-  priceTolerance: 0.003,
+  priceTolerance: 0.008,
   minPullbackBars: 5,
-  maxPullbackBars: 50,
-  swingWindow: 3,
+  maxPullbackBars: 80,
+  swingWindow: 2,
   minHeightAtr: 0,
 };
 

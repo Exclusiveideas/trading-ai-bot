@@ -33,12 +33,14 @@ export async function POST(request: NextRequest) {
     outcome,
     rMultiple,
     barsToOutcome,
+    maxFavorableExcursion,
     qualityRating,
     trendState,
     session,
     supportQuality,
     notes,
     contextJson,
+    timeframe,
   } = body;
 
   if (
@@ -84,14 +86,36 @@ export async function POST(request: NextRequest) {
       outcome: outcome ?? "pending",
       rMultiple: rMultiple ?? null,
       barsToOutcome: barsToOutcome ?? null,
+      maxFavorableExcursion: maxFavorableExcursion ?? null,
       qualityRating,
       trendState: trendState ?? null,
       session: session ?? null,
       supportQuality: supportQuality ?? null,
       notes: notes ?? null,
       contextJson: contextJson ?? null,
+      timeframe: timeframe ?? "D",
     },
   });
 
   return NextResponse.json({ label }, { status: 201 });
+}
+
+export async function DELETE(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const pair = searchParams.get("pair");
+  const confirmAll = searchParams.get("confirmAll");
+
+  if (!pair && confirmAll !== "true") {
+    return NextResponse.json(
+      { error: "Must specify ?pair= or ?confirmAll=true to delete all" },
+      { status: 400 },
+    );
+  }
+
+  const where: Record<string, string> = {};
+  if (pair) where.pair = pair;
+
+  const result = await prisma.labeledPattern.deleteMany({ where });
+
+  return NextResponse.json({ deleted: result.count });
 }

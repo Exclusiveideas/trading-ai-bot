@@ -55,7 +55,7 @@ export type FindCandidatesOptions = {
   maxCandidates?: number;
 };
 
-const DEFAULT_MAX_CANDIDATES = 120;
+const DEFAULT_MAX_CANDIDATES = 200;
 
 export function deduplicateOverlapping(
   candidates: PatternCandidate[],
@@ -202,7 +202,7 @@ export function findAllCandidates(
     low: c.low,
     close: c.close,
   }));
-  const srLevels = detectSupportResistanceLevels(priceCandles);
+  const srLevels = detectSupportResistanceLevels(priceCandles, 500);
   const falseBreakouts = detectFalseBreakouts(candles, srLevels);
   for (const fb of falseBreakouts) {
     const endCandle = candles[fb.reversalIndex];
@@ -230,11 +230,22 @@ export function findAllCandidates(
     });
   }
 
-  candidates.sort((a, b) => a.startIndex - b.startIndex);
+  const byType = new Map<string, PatternCandidate[]>();
+  for (const c of candidates) {
+    const arr = byType.get(c.patternType) ?? [];
+    arr.push(c);
+    byType.set(c.patternType, arr);
+  }
 
-  const deduped = deduplicateOverlapping(candidates);
+  const deduped: PatternCandidate[] = [];
+  for (const [, typeCandidates] of byType) {
+    typeCandidates.sort((a, b) => a.startIndex - b.startIndex);
+    deduped.push(...deduplicateOverlapping(typeCandidates));
+  }
+
+  deduped.sort((a, b) => a.startIndex - b.startIndex);
+
   const max = options?.maxCandidates ?? DEFAULT_MAX_CANDIDATES;
-
   if (deduped.length <= max) return deduped;
 
   return deduped

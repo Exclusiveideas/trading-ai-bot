@@ -12,8 +12,9 @@ export async function GET(request: NextRequest) {
 
   const start = searchParams.get("start");
   const end = searchParams.get("end");
+  const timeframe = searchParams.get("timeframe") ?? "D";
 
-  const where: Record<string, unknown> = { pair };
+  const where: Record<string, unknown> = { pair, timeframe };
   if (start || end) {
     const timestamp: Record<string, Date> = {};
     if (start) timestamp.gte = new Date(start);

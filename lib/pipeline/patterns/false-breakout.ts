@@ -9,11 +9,11 @@ export type FalseBreakoutConfig = {
 };
 
 const DEFAULT_CONFIG: FalseBreakoutConfig = {
-  breakThresholdPips: 5,
-  reversalBars: 3,
-  useAtrThreshold: false,
-  minAtrPenetration: 0.1,
-  maxAtrPenetration: 1.5,
+  breakThresholdPips: 2,
+  reversalBars: 10,
+  useAtrThreshold: true,
+  minAtrPenetration: 0.05,
+  maxAtrPenetration: 2.0,
 };
 
 export type FalseBreakoutDetection = {
@@ -41,9 +41,10 @@ export function detectFalseBreakouts(
 
       const minThreshold = resolveMinThreshold(cfg, atr);
       const maxThreshold = resolveMaxThreshold(cfg, atr);
+      const levelBuffer = atr !== null && atr > 0 ? atr * 0.2 : 0.0002;
 
       const brokeAbove =
-        prev.close <= level && curr.high > level + minThreshold;
+        prev.close <= level + levelBuffer && curr.high > level + minThreshold;
       if (brokeAbove) {
         const penetration = curr.high - level;
         if (maxThreshold !== null && penetration > maxThreshold) continue;
@@ -62,7 +63,8 @@ export function detectFalseBreakouts(
         }
       }
 
-      const brokeBelow = prev.close >= level && curr.low < level - minThreshold;
+      const brokeBelow =
+        prev.close >= level - levelBuffer && curr.low < level - minThreshold;
       if (brokeBelow) {
         const penetration = level - curr.low;
         if (maxThreshold !== null && penetration > maxThreshold) continue;

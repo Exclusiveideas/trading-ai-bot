@@ -182,13 +182,22 @@ describe(findNearestLevels, () => {
 });
 
 describe(distanceInPips, () => {
-  test("calculates correct pip distance", () => {
+  test("calculates correct pip distance for standard pairs", () => {
     expect(distanceInPips(1.105, 1.1)).toBeCloseTo(50, 0);
   });
 
   test("is always positive", () => {
     expect(distanceInPips(1.1, 1.15)).toBeCloseTo(500, 0);
     expect(distanceInPips(1.15, 1.1)).toBeCloseTo(500, 0);
+  });
+
+  test("uses 100 multiplier for JPY pairs", () => {
+    expect(distanceInPips(150.5, 150.0, "USD/JPY")).toBeCloseTo(50, 0);
+    expect(distanceInPips(165.25, 165.0, "EUR/JPY")).toBeCloseTo(25, 0);
+  });
+
+  test("uses 10000 multiplier when pair is undefined", () => {
+    expect(distanceInPips(1.105, 1.1)).toBeCloseTo(50, 0);
   });
 });
 
@@ -242,9 +251,54 @@ describe(classifyTrendState, () => {
 });
 
 describe(identifyTradingSession, () => {
-  test("returns daily for any timestamp", () => {
-    expect(identifyTradingSession(new Date("2024-01-15T10:00:00Z"))).toBe(
+  test("returns daily for D timeframe regardless of hour", () => {
+    expect(identifyTradingSession(new Date("2024-01-15T10:00:00Z"), "D")).toBe(
       "daily",
+    );
+    expect(identifyTradingSession(new Date("2024-01-15T03:00:00Z"), "D")).toBe(
+      "daily",
+    );
+  });
+
+  test("returns asian for 00:00-07:59 UTC", () => {
+    expect(identifyTradingSession(new Date("2024-01-15T00:00:00Z"), "H1")).toBe(
+      "asian",
+    );
+    expect(identifyTradingSession(new Date("2024-01-15T07:59:00Z"), "H4")).toBe(
+      "asian",
+    );
+  });
+
+  test("returns london for 08:00-12:59 UTC", () => {
+    expect(identifyTradingSession(new Date("2024-01-15T08:00:00Z"), "H1")).toBe(
+      "london",
+    );
+    expect(
+      identifyTradingSession(new Date("2024-01-15T12:00:00Z"), "M15"),
+    ).toBe("london");
+  });
+
+  test("returns new_york for 13:00-20:59 UTC", () => {
+    expect(identifyTradingSession(new Date("2024-01-15T13:00:00Z"), "H1")).toBe(
+      "new_york",
+    );
+    expect(
+      identifyTradingSession(new Date("2024-01-15T20:00:00Z"), "M15"),
+    ).toBe("new_york");
+  });
+
+  test("returns off_hours for 21:00-23:59 UTC", () => {
+    expect(identifyTradingSession(new Date("2024-01-15T21:00:00Z"), "H1")).toBe(
+      "off_hours",
+    );
+    expect(
+      identifyTradingSession(new Date("2024-01-15T23:30:00Z"), "M15"),
+    ).toBe("off_hours");
+  });
+
+  test("defaults to session-based when no timeframe provided", () => {
+    expect(identifyTradingSession(new Date("2024-01-15T10:00:00Z"))).toBe(
+      "london",
     );
   });
 });

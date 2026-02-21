@@ -43,6 +43,8 @@ next-env.d.ts
 
 # python
 python/venv/
+python/.venv/
+python/data/*.csv
 __pycache__/
 *.pyc
 .ipynb_checkpoints/

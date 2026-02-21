@@ -9,12 +9,12 @@ function makeBar(high: number, low: number, close?: number) {
 describe(calculateOutcome, () => {
   test("long trade hits take profit", () => {
     const candles = [
-      makeBar(1.10, 1.08),
+      makeBar(1.1, 1.08),
       makeBar(1.12, 1.09),
       makeBar(1.15, 1.11),
     ];
     const result = calculateOutcome(candles, {
-      entryPrice: 1.10,
+      entryPrice: 1.1,
       stopLoss: 1.08,
       takeProfit: 1.14,
       entryIndex: 0,
@@ -23,15 +23,13 @@ describe(calculateOutcome, () => {
     expect(result.rMultiple).toBeCloseTo(2, 5);
     expect(result.barsToOutcome).toBe(2);
     expect(result.exitPrice).toBe(1.14);
+    expect(result.maxFavorableExcursion).toBeCloseTo(2.5, 1);
   });
 
   test("long trade hits stop loss", () => {
-    const candles = [
-      makeBar(1.10, 1.08),
-      makeBar(1.09, 1.07),
-    ];
+    const candles = [makeBar(1.1, 1.08), makeBar(1.09, 1.07)];
     const result = calculateOutcome(candles, {
-      entryPrice: 1.10,
+      entryPrice: 1.1,
       stopLoss: 1.08,
       takeProfit: 1.14,
       entryIndex: 0,
@@ -41,17 +39,18 @@ describe(calculateOutcome, () => {
       rMultiple: -1,
       barsToOutcome: 1,
       exitPrice: 1.08,
+      maxFavorableExcursion: expect.any(Number),
     });
   });
 
   test("short trade hits take profit", () => {
     const candles = [
-      makeBar(1.12, 1.10),
+      makeBar(1.12, 1.1),
       makeBar(1.11, 1.09),
       makeBar(1.09, 1.06),
     ];
     const result = calculateOutcome(candles, {
-      entryPrice: 1.10,
+      entryPrice: 1.1,
       stopLoss: 1.12,
       takeProfit: 1.06,
       entryIndex: 0,
@@ -61,16 +60,15 @@ describe(calculateOutcome, () => {
       rMultiple: 2,
       barsToOutcome: 2,
       exitPrice: 1.06,
+      maxFavorableExcursion: expect.any(Number),
     });
+    expect(result.maxFavorableExcursion).toBeCloseTo(2, 1);
   });
 
   test("short trade hits stop loss", () => {
-    const candles = [
-      makeBar(1.12, 1.10),
-      makeBar(1.13, 1.11),
-    ];
+    const candles = [makeBar(1.12, 1.1), makeBar(1.13, 1.11)];
     const result = calculateOutcome(candles, {
-      entryPrice: 1.10,
+      entryPrice: 1.1,
       stopLoss: 1.12,
       takeProfit: 1.06,
       entryIndex: 0,
@@ -80,16 +78,14 @@ describe(calculateOutcome, () => {
       rMultiple: -1,
       barsToOutcome: 1,
       exitPrice: 1.12,
+      maxFavorableExcursion: expect.any(Number),
     });
   });
 
   test("same bar stop and target hit assumes stop (conservative)", () => {
-    const candles = [
-      makeBar(1.10, 1.08),
-      makeBar(1.15, 1.05),
-    ];
+    const candles = [makeBar(1.1, 1.08), makeBar(1.15, 1.05)];
     const result = calculateOutcome(candles, {
-      entryPrice: 1.10,
+      entryPrice: 1.1,
       stopLoss: 1.08,
       takeProfit: 1.14,
       entryIndex: 0,
@@ -100,44 +96,61 @@ describe(calculateOutcome, () => {
 
   test("pending when max bars exceeded", () => {
     const candles = [
-      makeBar(1.10, 1.09),
-      makeBar(1.105, 1.095, 1.10),
-      makeBar(1.105, 1.095, 1.10),
+      makeBar(1.1, 1.09),
+      makeBar(1.105, 1.095, 1.1),
+      makeBar(1.105, 1.095, 1.1),
     ];
     const result = calculateOutcome(
       candles,
-      { entryPrice: 1.10, stopLoss: 1.05, takeProfit: 1.20, entryIndex: 0 },
-      2
+      { entryPrice: 1.1, stopLoss: 1.05, takeProfit: 1.2, entryIndex: 0 },
+      2,
     );
     expect(result.outcome).toBe("pending");
     expect(result.rMultiple).not.toBeNull();
     expect(result.barsToOutcome).toBe(2);
     expect(result.exitPrice).toBeNull();
+    expect(result.maxFavorableExcursion).toBeCloseTo(0.1, 1);
   });
 
   test("pending when entry at end of data", () => {
-    const candles = [makeBar(1.10, 1.08)];
+    const candles = [makeBar(1.1, 1.08)];
     const result = calculateOutcome(candles, {
-      entryPrice: 1.10,
+      entryPrice: 1.1,
       stopLoss: 1.08,
       takeProfit: 1.14,
       entryIndex: 0,
     });
     expect(result.outcome).toBe("pending");
+    expect(result.maxFavorableExcursion).toBeNull();
   });
 
   test("pending when zero risk", () => {
-    const candles = [
-      makeBar(1.10, 1.08),
-      makeBar(1.12, 1.09),
-    ];
+    const candles = [makeBar(1.1, 1.08), makeBar(1.12, 1.09)];
     const result = calculateOutcome(candles, {
-      entryPrice: 1.10,
-      stopLoss: 1.10,
+      entryPrice: 1.1,
+      stopLoss: 1.1,
       takeProfit: 1.14,
       entryIndex: 0,
     });
     expect(result.outcome).toBe("pending");
+    expect(result.maxFavorableExcursion).toBeNull();
+  });
+
+  test("MFE tracks peak favorable movement before stop", () => {
+    const candles = [
+      makeBar(1.1, 1.08),
+      makeBar(1.12, 1.09),
+      makeBar(1.13, 1.1),
+      makeBar(1.11, 1.07),
+    ];
+    const result = calculateOutcome(candles, {
+      entryPrice: 1.1,
+      stopLoss: 1.08,
+      takeProfit: 1.16,
+      entryIndex: 0,
+    });
+    expect(result.outcome).toBe("loss");
+    expect(result.maxFavorableExcursion).toBeCloseTo(1.5, 1);
   });
 
   test("rMultiple sign matches outcome for long trades", () => {
@@ -153,19 +166,23 @@ describe(calculateOutcome, () => {
 
           const winResult = calculateOutcome(
             [makeBar(entry + 0.001, entry - 0.001), winBar],
-            { entryPrice: entry, stopLoss, takeProfit, entryIndex: 0 }
+            { entryPrice: entry, stopLoss, takeProfit, entryIndex: 0 },
           );
 
           const lossResult = calculateOutcome(
             [makeBar(entry + 0.001, entry - 0.001), lossBar],
-            { entryPrice: entry, stopLoss, takeProfit, entryIndex: 0 }
+            { entryPrice: entry, stopLoss, takeProfit, entryIndex: 0 },
           );
 
-          const winOk = winResult.outcome !== "win" || (winResult.rMultiple !== null && winResult.rMultiple > 0);
-          const lossOk = lossResult.outcome !== "loss" || (lossResult.rMultiple !== null && lossResult.rMultiple < 0);
+          const winOk =
+            winResult.outcome !== "win" ||
+            (winResult.rMultiple !== null && winResult.rMultiple > 0);
+          const lossOk =
+            lossResult.outcome !== "loss" ||
+            (lossResult.rMultiple !== null && lossResult.rMultiple < 0);
           return winOk && lossOk;
-        }
-      )
+        },
+      ),
     );
   });
 });

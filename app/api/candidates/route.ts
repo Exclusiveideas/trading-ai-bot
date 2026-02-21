@@ -34,8 +34,10 @@ export async function GET(request: NextRequest) {
   }
   const patternTypeFilter = rawPatternType as PatternType | null;
 
+  const timeframe = searchParams.get("timeframe") ?? "D";
+
   const candles = await prisma.rawCandle.findMany({
-    where: { pair },
+    where: { pair, timeframe },
     orderBy: { timestamp: "asc" },
     include: { features: true, contextFeatures: true },
   });

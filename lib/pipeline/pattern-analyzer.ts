@@ -33,7 +33,7 @@ export type AnalysisResult = {
   approved: boolean;
 };
 
-const APPROVAL_THRESHOLD = 6;
+const APPROVAL_THRESHOLD = 5;
 
 export function analyzeCandidate(
   candidate: PatternCandidate & { outcome: OutcomeResult },
@@ -199,51 +199,54 @@ function analyzeTrendAlignment(
   patternLabel: string,
   notes: string[],
 ): number {
-  if (!trend) return 0;
+  if (!trend) {
+    notes.push(`▼ Unknown trend state — insufficient data for trend analysis`);
+    return -1.5;
+  }
 
   if (direction === "bullish") {
     if (trend === "strong_uptrend" || trend === "weak_uptrend") {
       notes.push(
         `▲ Bullish ${patternLabel} in ${trend.replace(/_/g, " ")} — trend continuation, high probability`,
       );
-      return 1;
+      return 1.5;
     }
     if (trend === "weak_downtrend") {
       notes.push(
-        `▲ Bullish ${patternLabel} in weak downtrend — potential reversal with S/R confirmation`,
+        `— Bullish ${patternLabel} in weak downtrend — potential reversal, needs strong S/R`,
       );
-      return 0.75;
+      return 0;
     }
     if (trend === "strong_downtrend") {
       notes.push(
-        `— Bullish ${patternLabel} in strong downtrend — counter-trend, needs very strong S/R`,
+        `▼ Bullish ${patternLabel} in strong downtrend — counter-trend, low probability`,
       );
-      return 0.25;
+      return -1;
     }
     notes.push("— Ranging market — lower directional conviction");
-    return 0.25;
+    return -0.5;
   }
 
   if (trend === "strong_downtrend" || trend === "weak_downtrend") {
     notes.push(
       `▲ Bearish ${patternLabel} in ${trend.replace(/_/g, " ")} — trend continuation, high probability`,
     );
-    return 1;
+    return 1.5;
   }
   if (trend === "weak_uptrend") {
     notes.push(
-      `▲ Bearish ${patternLabel} in weak uptrend — potential reversal with resistance confirmation`,
+      `— Bearish ${patternLabel} in weak uptrend — potential reversal, needs strong resistance`,
     );
-    return 0.75;
+    return 0;
   }
   if (trend === "strong_uptrend") {
     notes.push(
-      `— Bearish ${patternLabel} in strong uptrend — counter-trend, needs very strong resistance`,
+      `▼ Bearish ${patternLabel} in strong uptrend — counter-trend, low probability`,
     );
-    return 0.25;
+    return -1;
   }
   notes.push("— Ranging market — lower directional conviction");
-  return 0.25;
+  return -0.5;
 }
 
 function analyzeSrProximity(
@@ -261,7 +264,7 @@ function analyzeSrProximity(
     notes.push(
       `▼ No relevant ${levelName} level detected — pattern in no-man's land`,
     );
-    return -1;
+    return -2;
   }
 
   const dist = Math.abs(price - level);
@@ -349,7 +352,7 @@ function analyzePinBar(
   const idx = candidate.endIndex;
   const c = candles[idx];
   const notes: string[] = [];
-  let score = 3;
+  let score = 2;
 
   const range = c.high - c.low;
   if (range <= 0)

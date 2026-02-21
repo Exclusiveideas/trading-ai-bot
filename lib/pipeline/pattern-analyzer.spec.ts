@@ -68,6 +68,7 @@ function makeCandidate(
       rMultiple: 2.0,
       barsToOutcome: 15,
       exitPrice: 1.135,
+      maxFavorableExcursion: 2.0,
     },
     ...overrides,
   };
@@ -191,7 +192,7 @@ describe("analyzeCandidate", () => {
       expect(result.notes).toContain("zero range");
     });
 
-    test("all-null indicators still produces valid score", () => {
+    test("all-null indicators rejects due to missing context", () => {
       const candles = Array.from({ length: 10 }, () =>
         makeNullIndicatorCandle(),
       );
@@ -214,7 +215,10 @@ describe("analyzeCandidate", () => {
 
       const result = analyzeCandidate(candidate, candles);
       expect(result.qualityRating).toBeGreaterThanOrEqual(1);
-      expect(result.qualityRating).toBeLessThanOrEqual(10);
+      expect(result.qualityRating).toBeLessThanOrEqual(4);
+      expect(result.approved).toBe(false);
+      expect(result.notes).toContain("Unknown trend state");
+      expect(result.notes).toContain("no-man's land");
       expect(result.notes).toContain("Outcome");
     });
 
@@ -227,6 +231,7 @@ describe("analyzeCandidate", () => {
           rMultiple: 2.0,
           barsToOutcome: 15,
           exitPrice: 1.135,
+          maxFavorableExcursion: 2.0,
         },
       });
       expect(analyzeCandidate(winCandidate, candles).notes).toContain(
@@ -239,6 +244,7 @@ describe("analyzeCandidate", () => {
           rMultiple: -1.0,
           barsToOutcome: 5,
           exitPrice: 1.09,
+          maxFavorableExcursion: 0.5,
         },
       });
       expect(analyzeCandidate(lossCandidate, candles).notes).toContain(
@@ -251,6 +257,7 @@ describe("analyzeCandidate", () => {
           rMultiple: null,
           barsToOutcome: null,
           exitPrice: null,
+          maxFavorableExcursion: null,
         },
       });
       expect(analyzeCandidate(pendingCandidate, candles).notes).toContain(
@@ -432,7 +439,7 @@ describe("analyzeCandidate", () => {
   });
 
   describe("approval threshold", () => {
-    test("score exactly 6 is approved", () => {
+    test("score at or above threshold is approved", () => {
       const candles = makeCandles(10);
       candles[5] = makeCandle({
         open: 1.1,
@@ -459,10 +466,10 @@ describe("analyzeCandidate", () => {
       });
 
       const result = analyzeCandidate(candidate, candles);
-      if (result.qualityRating >= 6) {
+      if (result.qualityRating >= 5) {
         expect(result.approved).toBe(true);
       }
-      if (result.qualityRating < 6) {
+      if (result.qualityRating < 5) {
         expect(result.approved).toBe(false);
       }
     });
@@ -489,7 +496,7 @@ describe("analyzeCandidate", () => {
       });
 
       const result = analyzeCandidate(candidate, candles);
-      expect(result.qualityRating).toBeLessThan(6);
+      expect(result.qualityRating).toBeLessThan(5);
       expect(result.approved).toBe(false);
     });
 

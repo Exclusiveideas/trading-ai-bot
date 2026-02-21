@@ -8,91 +8,91 @@ datasource db {
 }
 
 model RawCandle {
-  id        Int      @id @default(autoincrement())
-  pair      String   @db.VarChar(20)
-  timestamp DateTime @db.Timestamptz()
-  open      Float
-  high      Float
-  low       Float
-  close     Float
-  volume    Float    @default(0)
-  timeframe String   @default("1day") @db.VarChar(10)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
-
+  id              Int                @id @default(autoincrement())
+  pair            String             @db.VarChar(20)
+  timestamp       DateTime           @db.Timestamptz(6)
+  open            Float
+  high            Float
+  low             Float
+  close           Float
+  volume          Float              @default(0)
+  timeframe       String             @default("D") @db.VarChar(10)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   features        CalculatedFeature?
   contextFeatures ContextFeature?
 
   @@unique([pair, timestamp, timeframe])
-  @@index([pair, timestamp(sort: Desc)])
+  @@index([pair, timeframe, timestamp(sort: Desc)])
   @@map("raw_candles")
 }
 
 model CalculatedFeature {
-  id            Int   @id @default(autoincrement())
-  candleId      Int   @unique @map("candle_id")
-  sma20         Float? @map("sma_20")
-  sma50         Float? @map("sma_50")
-  ema200        Float? @map("ema_200")
+  id            Int       @id @default(autoincrement())
+  candleId      Int       @unique @map("candle_id")
+  sma20         Float?    @map("sma_20")
+  sma50         Float?    @map("sma_50")
+  ema200        Float?    @map("ema_200")
   rsi           Float?
   macd          Float?
-  macdSignal    Float? @map("macd_signal")
-  macdHistogram Float? @map("macd_histogram")
+  macdSignal    Float?    @map("macd_signal")
+  macdHistogram Float?    @map("macd_histogram")
   adx           Float?
   atr           Float?
-  bbUpper       Float? @map("bb_upper")
-  bbMiddle      Float? @map("bb_middle")
-  bbLower       Float? @map("bb_lower")
-  volumeSma     Float? @map("volume_sma")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
-
-  candle RawCandle @relation(fields: [candleId], references: [id], onDelete: Cascade)
+  bbUpper       Float?    @map("bb_upper")
+  bbMiddle      Float?    @map("bb_middle")
+  bbLower       Float?    @map("bb_lower")
+  volumeSma     Float?    @map("volume_sma")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  candle        RawCandle @relation(fields: [candleId], references: [id], onDelete: Cascade)
 
   @@index([candleId])
   @@map("calculated_features")
 }
 
 model ContextFeature {
-  id                    Int      @id @default(autoincrement())
-  candleId              Int      @unique @map("candle_id")
-  nearestSupport        Float?   @map("nearest_support")
-  nearestResistance     Float?   @map("nearest_resistance")
-  distToSupportPips     Float?   @map("dist_to_support_pips")
-  distToResistancePips  Float?   @map("dist_to_resistance_pips")
-  distToSupportAtr      Float?   @map("dist_to_support_atr")
-  distToResistanceAtr   Float?   @map("dist_to_resistance_atr")
-  trendState            String?  @map("trend_state") @db.VarChar(30)
-  tradingSession        String?  @map("trading_session") @db.VarChar(20)
-  nearestRoundNumber    Float?   @map("nearest_round_number")
-  distToRoundNumberPips Float?   @map("dist_to_round_number_pips")
-  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz()
-
-  candle RawCandle @relation(fields: [candleId], references: [id], onDelete: Cascade)
+  id                    Int       @id @default(autoincrement())
+  candleId              Int       @unique @map("candle_id")
+  nearestSupport        Float?    @map("nearest_support")
+  nearestResistance     Float?    @map("nearest_resistance")
+  distToSupportPips     Float?    @map("dist_to_support_pips")
+  distToResistancePips  Float?    @map("dist_to_resistance_pips")
+  distToSupportAtr      Float?    @map("dist_to_support_atr")
+  distToResistanceAtr   Float?    @map("dist_to_resistance_atr")
+  trendState            String?   @map("trend_state") @db.VarChar(30)
+  tradingSession        String?   @map("trading_session") @db.VarChar(20)
+  nearestRoundNumber    Float?    @map("nearest_round_number")
+  distToRoundNumberPips Float?    @map("dist_to_round_number_pips")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  candle                RawCandle @relation(fields: [candleId], references: [id], onDelete: Cascade)
 
   @@index([candleId])
   @@map("context_features")
 }
 
 model LabeledPattern {
-  id              Int      @id @default(autoincrement())
-  pair            String   @db.VarChar(20)
-  patternType     String   @map("pattern_type") @db.VarChar(30)
-  startTimestamp  DateTime @map("start_timestamp") @db.Timestamptz()
-  endTimestamp    DateTime @map("end_timestamp") @db.Timestamptz()
-  entryPrice      Float    @map("entry_price")
-  stopLoss        Float    @map("stop_loss")
-  takeProfit      Float    @map("take_profit")
-  outcome         String   @default("pending") @db.VarChar(15)
-  rMultiple       Float?   @map("r_multiple")
-  barsToOutcome   Int?     @map("bars_to_outcome")
-  qualityRating   Int      @map("quality_rating")
-  trendState      String?  @map("trend_state") @db.VarChar(30)
-  session         String?  @db.VarChar(20)
-  supportQuality  Float?   @map("support_quality")
-  notes           String?
-  contextJson     Json?    @map("context_json")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  id             Int      @id @default(autoincrement())
+  pair           String   @db.VarChar(20)
+  patternType    String   @map("pattern_type") @db.VarChar(30)
+  startTimestamp DateTime @map("start_timestamp") @db.Timestamptz(6)
+  endTimestamp   DateTime @map("end_timestamp") @db.Timestamptz(6)
+  entryPrice     Float    @map("entry_price")
+  stopLoss       Float    @map("stop_loss")
+  takeProfit     Float    @map("take_profit")
+  outcome        String   @default("pending") @db.VarChar(15)
+  rMultiple      Float?   @map("r_multiple")
+  barsToOutcome  Int?     @map("bars_to_outcome")
+  maxFavorableExcursion Float? @map("max_favorable_excursion")
+  qualityRating  Int      @map("quality_rating")
+  trendState     String?  @map("trend_state") @db.VarChar(30)
+  session        String?  @db.VarChar(20)
+  supportQuality Float?   @map("support_quality")
+  notes          String?
+  contextJson    Json?    @map("context_json")
+  timeframe      String   @default("D") @db.VarChar(10)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([pair, patternType])
+  @@index([pair, timeframe])
   @@index([outcome])
   @@map("labeled_patterns")
 }

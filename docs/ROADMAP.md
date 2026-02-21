@@ -14,7 +14,7 @@ Building a Context-Aware Machine Learning Trading System
 **Timeframes:** D, H4, H1, M15
 
 *Created: February 11, 2026*
-*Updated: February 21, 2026 — Updated after H1 backfill, re-labeling, and model retraining*
+*Updated: February 21, 2026 — Phase 8 complete (production scanner), Phase 9A complete (outcome tracking + auto-retrain)*
 
 ---
 
@@ -30,8 +30,9 @@ Building a Context-Aware Machine Learning Trading System
 | Phase 6: V2 Multi-Class | COMPLETE | Filtered strategy: +4,506R total, 0.389R/trade avg |
 | Phase 6B: V3 Regression | COMPLETE | R² = 0.394, MAE = 0.635R |
 | Phase 7: All Pattern Types | COMPLETE | All 5 types done (exceeded original 2-type target) |
-| Phase 8: Production Scanner | NOT STARTED | Next up |
-| Phase 9: Paper Trading | NOT STARTED | |
+| Phase 8: Production Scanner | COMPLETE | 20 pairs × 4 TFs, 3-model predictions, Telegram alerts |
+| Phase 9A: Outcome Tracking | COMPLETE | Signal resolution, accuracy metrics, auto-retrain pipeline |
+| Phase 9B: Paper Trading | NOT STARTED | Next up |
 | Phase 10: Live Trading | NOT STARTED | |
 
 ### Database State
@@ -42,6 +43,9 @@ Building a Context-Aware Machine Learning Trading System
 | calculated_features | 9,733,231 |
 | context_features | 9,733,231 |
 | labeled_patterns | 103,958 |
+| signals | 39+ (live, auto-resolved) |
+| model_versions | 1 (v1.0 baseline) |
+| accuracy_snapshots | rolling metrics |
 
 ### Model Performance
 
@@ -71,8 +75,9 @@ Best strategy: V2 Filtered — takes 60% of trades (predicted >=1R MFE), +4,506R
 - [Phase 6: V2 Multi-Class — COMPLETE](#phase-6-v2-multi-class)
 - [Phase 6B: V3 MFE Regression — COMPLETE](#phase-6b-mfe-regression-model-v3)
 - [Phase 7: All Pattern Types — COMPLETE](#phase-7-all-pattern-types)
-- [Phase 8: Production Scanner — NEXT](#phase-8-production-scanner)
-- [Phase 9: Paper Trading](#phase-9-paper-trading)
+- [Phase 8: Production Scanner — COMPLETE](#phase-8-production-scanner)
+- [Phase 9A: Outcome Tracking — COMPLETE](#phase-9a-outcome-tracking--auto-retrain)
+- [Phase 9B: Paper Trading](#phase-9b-paper-trading)
 - [Phase 10: Live Trading](#phase-10-live-trading)
 - [Milestones & Checkpoints](#milestones--checkpoints)
 - [Model Evolution Strategy (V1 → V2 → V3)](#model-evolution-strategy)
@@ -204,162 +209,131 @@ Best strategy: V2 Filtered — takes 60% of trades (predicted >=1R MFE), +4,506R
 
 ---
 
-## PHASE 8: PRODUCTION SCANNER
+## PHASE 8: PRODUCTION SCANNER — COMPLETE
 
-**Week 21-23 | Goal: Automated system to find setups in real-time**
+**Completed | Real-time scanner: 20 pairs × 4 TFs → 3 model predictions → Telegram alerts**
 
-### Task 8.1: Pattern Detection Logic
+### Actual Results
+- **FastAPI prediction server** (`python/server/main.py`): loads 3 XGBoost models at startup, serves `/predict`, `/predict/batch`, `/health`
+- **Scanner** (`scripts/scan.ts`): polls OANDA for 300 latest candles per pair/TF, detects patterns, builds 104-feature vectors, gets predictions, saves signals to DB
+- **Telegram alerts** (`lib/scanner/telegram.ts`): formatted alerts with pair, pattern, quality, win probability, MFE bucket, R:R ratio
+- **Feature vector builder** (`lib/scanner/feature-vector.ts`): 104 features matching trained models exactly (5 unit tests)
+- **Signal filtering**: V1 win prob >= 55% OR V2 MFE bucket >= "1-1.5R"
+- **Deduplication**: unique constraint on (pair, timeframe, patternType, patternEnd)
+- **End-to-end tested**: 39 signals saved, ~2 min for all 20 pairs
+- **Cron**: `*/15 * * * *` for M15 coverage
 
-**What to do:**
-- Build JavaScript functions to detect each pattern type
-- Scan most recent 50-100 candles for pattern formation
-- Flag potential setups
-- Calculate all features needed for prediction
-
-**Deliverable:** Pattern detection engine
-
-*Success check: Can scan EUR/USD and identify pin bars automatically*
-
-### Task 8.2: Python Prediction API
-
-**What to do:**
-- Build FastAPI endpoint
-- Load trained models at startup:
-  - **V1 classifier** (binary win/loss) — always available
-  - **V2 classifier** (multi-R buckets) — if trained
-  - **V3 regressor** (MFE prediction) — if trained
-- Endpoints:
-  - `POST /predict/classify` — returns win probability (V1) or R-bucket probabilities (V2)
-  - `POST /predict/mfe` — returns predicted MFE and suggested TP level (V3)
-  - `POST /predict/full` — returns combined recommendation from all available models
-- Add health check endpoint
-- Handle errors gracefully
-
-**Deliverable:** Running API server serving all available model versions
-
-*Success check: Can send test request, get back probability + suggested TP response*
-
-### Task 8.3: Scanner Integration
-
-**What to do:**
-- Connect JS scanner to Python API
-- For each detected pattern:
-  - Calculate features
-  - Send to `/predict/full` endpoint
-  - Receive: win probability, predicted R-bucket, predicted MFE, suggested TP
-- Filter for high-probability only (>65% or >70%)
-- **If V3 available:** Use dynamic TP from MFE prediction instead of fixed 2R
-- Log all detections with full prediction details
-
-**Deliverable:** End-to-end detection → prediction pipeline with dynamic TP
-
-*Success check: Scanner finds pattern, gets prediction + TP suggestion, displays result*
-
-### Task 8.4: Alert System
-
-**What to do:**
-- Choose notification method (email, Telegram, Discord)
-- Set up alerts for high-probability setups
-- Include: pair, setup type, probability, entry/stop/target levels
-- **If V3 available:** Include predicted MFE and dynamic TP level in alert
-- Add chart screenshot if possible
-- Test thoroughly
-
-**Deliverable:** Alert system that notifies you of opportunities with optimal TP
-
-*Success check: Receive test alert with all trade details including dynamic TP*
-
-### Task 8.5: Scheduling & Automation
-
-**What to do:**
-- Set scanner to run automatically (e.g., every 4 hours for daily charts)
-- Use cron job (Linux/Mac) or Task Scheduler (Windows)
-- OR deploy to cloud (Heroku, Railway, AWS)
-- Add logging and monitoring
-- Set up error notifications
-
-**Deliverable:** Fully automated scanner
-
-*Success check: Runs without manual intervention for 1 week*
+### Files Created
+| File | Purpose |
+|---|---|
+| `lib/scanner/feature-vector.ts` | 104-feature vector builder |
+| `lib/scanner/feature-vector.spec.ts` | 5 unit tests |
+| `lib/scanner/telegram.ts` | Telegram Bot API alert sender |
+| `python/server/main.py` | FastAPI prediction server (3 models) |
+| `python/server/requirements.txt` | Python dependencies |
+| `scripts/scan.ts` | Main scanner orchestrator |
 
 ---
 
-## PHASE 9: PAPER TRADING
+## PHASE 9A: OUTCOME TRACKING & AUTO-RETRAIN — COMPLETE
 
-**Week 24-36 (~3 months) | Goal: Validate system with fake money before going live**
+**Completed | Signal resolution, accuracy metrics, model versioning, auto-retrain pipeline**
 
-### Task 9.1: Trade Tracking Spreadsheet
+### Actual Results
+- **Signal resolver** (`lib/resolver/resolve-signals.ts`): polls OANDA for open signals, resolves as win/loss/expired using `calculateOutcome()`
+- **MAE tracking**: extended outcome calculator to track max adverse excursion alongside MFE
+- **Accuracy tracker** (`lib/resolver/accuracy-tracker.ts`): computes rolling V1 accuracy, V2 bucket accuracy, V3 MAE from resolved signals
+- **Retrain trigger** (`lib/resolver/retrain-trigger.ts`): fires when V1 accuracy < 55% on 100+ signals OR 500+ new resolved signals
+- **Python training pipeline** (`python/server/train_models.py`): exports combined labeled_patterns + resolved signals, retrains all 3 models, saves versioned model files
+- **Hot-reload**: `POST /retrain` endpoint on FastAPI retrains models and reloads them without restart
+- **Model versioning**: `ModelVersion` table tracks version, metrics, active flag; each signal stores which model version predicted it
+- **Telegram summaries**: resolution updates with win/loss counts and accuracy metrics
+- **Smart timeframe scheduling**: M15 every 15 min, H1 on the hour, H4 every 4h, D at midnight UTC
+
+### Schema Additions
+- Signal: `status`, `outcome`, `exitPrice`, `rMultiple`, `barsToOutcome`, `maxFavorableExcursion`, `maxAdverseExcursion`, `resolvedAt`, `barsElapsed`, `lastCheckedAt`, `modelVersion`
+- New tables: `ModelVersion`, `AccuracySnapshot`
+
+### Files Created
+| File | Purpose |
+|---|---|
+| `lib/resolver/resolve-signals.ts` | Core signal resolution logic |
+| `lib/resolver/resolve-signals.spec.ts` | 11 unit tests |
+| `lib/resolver/accuracy-tracker.ts` | Rolling accuracy metrics |
+| `lib/resolver/accuracy-tracker.spec.ts` | 7 unit tests |
+| `lib/resolver/retrain-trigger.ts` | Retrain decision logic |
+| `python/server/train_models.py` | Reusable training pipeline |
+| `scripts/resolve.ts` | CLI entry point for resolver |
+
+### How to Run
+```bash
+# Start FastAPI server
+source python/venv/bin/activate && python -m uvicorn python.server.main:app --port 8000
+
+# Run scanner (every 15 min)
+npx tsx scripts/scan.ts
+
+# Run resolver (every 15 min, staggered +7 min)
+npx tsx scripts/resolve.ts
+
+# Cron setup
+*/15 * * * * cd /path/to/trading-ai && npx tsx scripts/scan.ts >> logs/scanner.log 2>&1
+7,22,37,52 * * * * cd /path/to/trading-ai && npx tsx scripts/resolve.ts >> logs/resolver.log 2>&1
+```
+
+---
+
+## PHASE 9B: PAPER TRADING
+
+**NOT STARTED | Goal: Validate system with fake money before going live**
+
+### Task 9B.1: Execute Paper Trades
 
 **What to do:**
-- Create Google Sheet or Excel to log every signal
-- Columns: date, pair, setup, probability, entry, stop, target, **predicted MFE**, **actual MFE**, outcome, R-multiple
-- Calculate running statistics
-- Track by setup type, pair, context conditions
-- **Track dynamic TP vs fixed TP performance** side by side
+- Take every signal above threshold (system is already automated)
+- Monitor signals and resolutions via Telegram
+- Track dynamic TP vs fixed TP performance side by side
+- Record everything (auto-tracked in DB)
 
-**Deliverable:** Trade journal template with MFE tracking columns
-
-### Task 9.2: Execute Paper Trades
-
-**What to do:**
-- Take every signal above threshold (e.g., 65% probability)
-- Enter trades as if real (or use demo account)
-- **If V3 available:** Use dynamic TP for half the trades, fixed 2R for the other half (A/B test)
-- Follow system rules strictly
-- No cherry-picking or second-guessing
-- Record everything
-
-**Deliverable:** 30+ paper trades executed
+**Deliverable:** 30+ paper trades executed (auto-resolved by resolver)
 
 *Time: Minimum 2-3 months (need sample size)*
 
-*Success check: Following system religiously*
-
-### Task 9.3: Weekly Performance Review
+### Task 9B.2: Weekly Performance Review
 
 **What to do:**
-- Every Sunday, analyze past week
+- Every Sunday, analyze past week using AccuracySnapshot data
 - Calculate: win rate, avg R-multiple, profit factor
-- Compare actual outcomes to predicted probabilities
-- **Compare dynamic TP trades vs fixed TP trades** — is V3 adding value?
-- **Track predicted MFE vs actual MFE** — is the regression model calibrated?
+- Compare predicted vs actual outcomes per model
+- Compare predicted MFE vs actual MFE — is V3 calibrated?
 - Identify what's working vs what's not
-- Adjust filters if needed (e.g., raise threshold from 65% to 70%)
 
-**Deliverable:** Weekly review notes with V3 comparison data
+**Deliverable:** Weekly review notes
 
-*Success check: Can explain why you won/lost each trade*
-
-### Task 9.4: System Refinement
+### Task 9B.3: System Refinement
 
 **What to do:**
-- Based on paper trading results, refine:
-  - Probability threshold
-  - Position sizing rules
-  - Risk management (max daily loss, correlation limits)
-  - Which setups to trade vs skip
-  - **Dynamic TP percentile** (70%, 80%, or 90% of predicted MFE)
-- Update documentation
-- Retrain model if finding systematic errors
+- Based on live accuracy tracking:
+  - Adjust probability threshold (currently 55%)
+  - Adjust quality threshold (currently 5/10)
+  - Refine pattern-specific filters
+- Auto-retrain handles model drift automatically
+- Manual review of retrain results
 
-**Deliverable:** Refined trading rules document
+**Deliverable:** Refined trading rules
 
-*Success check: Clear rules for every decision*
-
-### Task 9.5: Final Validation
+### Task 9B.4: Final Validation
 
 **What to do:**
-- After 60-90 days of paper trading, calculate stats:
+- After 60-90 days, review cumulative stats:
   - Win rate (target: 60-70%)
   - Average R-multiple (target: 1.5-2.0+)
   - Profit factor (target: 1.5+)
   - Max drawdown (target: <20%)
-  - Sharpe ratio (target: >1.0)
-- **Compare V1 (fixed TP) vs V3 (dynamic TP) performance**
+- Compare model versions (accuracy tracked per version)
 - Decide if ready for live trading
-- Decide which model version to deploy live
 
-**Deliverable:** Performance report with model version comparison
+**Deliverable:** Performance report with go/no-go decision
 
 *Success check: Meets minimum profitability standards for 3 consecutive months*
 
@@ -432,9 +406,10 @@ Best strategy: V2 Filtered — takes 60% of trades (predicted >=1R MFE), +4,506R
 | Model V2 improved | DONE | +4,290R filtered strategy, 0.390R/trade |
 | V3 MFE regression trained | DONE | R² = 0.388, MAE = 0.637R |
 | All pattern types | DONE | 5 types (exceeded 2-type target) |
-| Scanner operational | NEXT | Phase 8 — real-time OANDA feed → model inference → alerts |
-| 30 paper trades | PENDING | Phase 9 |
-| Dynamic TP vs Fixed TP compared | PENDING | Phase 9 (A/B test during paper trading) |
+| Scanner operational | DONE | 20 pairs × 4 TFs, 39 signals in first run, Telegram alerts |
+| Outcome tracking | DONE | Auto-resolve signals, accuracy metrics, auto-retrain pipeline |
+| 30 paper trades | PENDING | Phase 9B |
+| Dynamic TP vs Fixed TP compared | PENDING | Phase 9B (tracked automatically via resolver) |
 | 60 paper trades | PENDING | Phase 9 |
 | Go live | PENDING | Phase 10 |
 
@@ -442,15 +417,21 @@ Best strategy: V2 Filtered — takes 60% of trades (predicted >=1R MFE), +4,506R
 
 ## IMMEDIATE NEXT STEPS
 
-### Phase 8 Prerequisites
+### Phase 9B: Paper Trading Validation
+- Set up cron for scanner + resolver (see Phase 9A for commands)
+- Monitor Telegram for signal alerts and resolution summaries
+- Let system run for 60-90 days to accumulate resolved signals
+- Review AccuracySnapshot data weekly
+
+### Optional Enhancements
+- Dashboard UI (Next.js pages showing signals, accuracy, model performance)
+- OANDA practice account integration for automated paper trade execution
 - Dynamic TP strategy backtesting (deferred from Phase 6B)
-- Ensemble decision system (V1 classifier + V3 regressor)
-- FastAPI prediction server
-- Real-time OANDA feed integration
 
 ### Maintenance
 - **Database backup** — `pg_dump trading_ai | gzip > trading_ai_backup.sql.gz` (last backup: Feb 21, 2026)
-- Re-run data collection + labeling periodically to keep models trained on recent data
+- Auto-retrain handles model drift (triggers at 500 resolved signals or accuracy < 55%)
+- Install new Python deps: `pip install psycopg2-binary pandas scikit-learn` (in venv)
 
 ---
 
@@ -549,6 +530,15 @@ Every label you save builds toward V3 — no extra work needed
 | `python/notebooks/phase6_model_v2v3_mfe.ipynb` | V2 multi-class + V3 regression training |
 | `python/models/` | Trained XGBoost model files |
 | `python/data/training-all.csv` | 98K × 85 column training data (gitignored) |
+| `python/server/main.py` | FastAPI prediction server (3 models + retrain endpoint) |
+| `python/server/train_models.py` | Reusable training pipeline for auto-retrain |
+| `scripts/scan.ts` | Production scanner (20 pairs × 4 TFs → predictions → alerts) |
+| `scripts/resolve.ts` | Signal resolver (outcome tracking + accuracy + retrain trigger) |
+| `lib/scanner/feature-vector.ts` | 104-feature vector builder for live predictions |
+| `lib/scanner/telegram.ts` | Telegram Bot API (signal alerts + resolution summaries) |
+| `lib/resolver/resolve-signals.ts` | Core signal resolution logic |
+| `lib/resolver/accuracy-tracker.ts` | Rolling model accuracy metrics |
+| `lib/resolver/retrain-trigger.ts` | Auto-retrain decision logic |
 | `docs/patterns/` | Pattern type definitions and detection criteria |
 
 ---
@@ -561,7 +551,9 @@ Every label you save builds toward V3 — no extra work needed
 
 ### Actual Progress
 - Phases 1-7 + 6B completed in ~10 days (Feb 11-21, 2026)
-- Remaining: Phase 8 (scanner), Phase 9 (paper trading, ~3 months), Phase 10 (live)
+- Phase 8 (production scanner) + Phase 9A (outcome tracking + auto-retrain) completed Feb 21, 2026
+- Remaining: Phase 9B (paper trading, ~3 months), Phase 10 (live)
 - Biggest bottleneck ahead: paper trading validation (minimum 60-90 days)
+- System is fully automated: scanner → signals → resolution → accuracy → retrain
 
 *Remember: This is a marathon, not a sprint. The traders who succeed are the ones who stay disciplined, track everything meticulously, and refuse to skip the validation phases. Trust the process.*

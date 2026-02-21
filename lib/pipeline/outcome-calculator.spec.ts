@@ -40,6 +40,7 @@ describe(calculateOutcome, () => {
       barsToOutcome: 1,
       exitPrice: 1.08,
       maxFavorableExcursion: expect.any(Number),
+      maxAdverseExcursion: expect.any(Number),
     });
   });
 
@@ -61,6 +62,7 @@ describe(calculateOutcome, () => {
       barsToOutcome: 2,
       exitPrice: 1.06,
       maxFavorableExcursion: expect.any(Number),
+      maxAdverseExcursion: expect.any(Number),
     });
     expect(result.maxFavorableExcursion).toBeCloseTo(2, 1);
   });
@@ -79,6 +81,7 @@ describe(calculateOutcome, () => {
       barsToOutcome: 1,
       exitPrice: 1.12,
       maxFavorableExcursion: expect.any(Number),
+      maxAdverseExcursion: expect.any(Number),
     });
   });
 
@@ -122,6 +125,7 @@ describe(calculateOutcome, () => {
     });
     expect(result.outcome).toBe("pending");
     expect(result.maxFavorableExcursion).toBeNull();
+    expect(result.maxAdverseExcursion).toBeNull();
   });
 
   test("pending when zero risk", () => {
@@ -134,6 +138,7 @@ describe(calculateOutcome, () => {
     });
     expect(result.outcome).toBe("pending");
     expect(result.maxFavorableExcursion).toBeNull();
+    expect(result.maxAdverseExcursion).toBeNull();
   });
 
   test("MFE tracks peak favorable movement before stop", () => {
@@ -151,6 +156,58 @@ describe(calculateOutcome, () => {
     });
     expect(result.outcome).toBe("loss");
     expect(result.maxFavorableExcursion).toBeCloseTo(1.5, 1);
+  });
+
+  test("MAE tracks peak adverse movement for long trade", () => {
+    const candles = [
+      makeBar(1.1, 1.08),
+      makeBar(1.11, 1.085),
+      makeBar(1.12, 1.09),
+      makeBar(1.15, 1.11),
+    ];
+    const result = calculateOutcome(candles, {
+      entryPrice: 1.1,
+      stopLoss: 1.06,
+      takeProfit: 1.14,
+      entryIndex: 0,
+    });
+    expect(result.outcome).toBe("win");
+    // MAE = (1.1 - 1.085) / (1.1 - 1.06) = 0.015 / 0.04 = 0.375R
+    expect(result.maxAdverseExcursion).toBeCloseTo(0.375, 2);
+  });
+
+  test("MAE tracks peak adverse movement for short trade", () => {
+    const candles = [
+      makeBar(1.12, 1.1),
+      makeBar(1.13, 1.09),
+      makeBar(1.11, 1.08),
+      makeBar(1.08, 1.05),
+    ];
+    const result = calculateOutcome(candles, {
+      entryPrice: 1.1,
+      stopLoss: 1.14,
+      takeProfit: 1.06,
+      entryIndex: 0,
+    });
+    expect(result.outcome).toBe("win");
+    // MAE for short = (bar.high - entry) / risk = (1.13 - 1.1) / (1.14 - 1.1) = 0.03 / 0.04 = 0.75R
+    expect(result.maxAdverseExcursion).toBeCloseTo(0.75, 2);
+  });
+
+  test("MAE is zero when price never moves against entry", () => {
+    const candles = [
+      makeBar(1.1, 1.1),
+      makeBar(1.12, 1.1),
+      makeBar(1.15, 1.11),
+    ];
+    const result = calculateOutcome(candles, {
+      entryPrice: 1.1,
+      stopLoss: 1.08,
+      takeProfit: 1.14,
+      entryIndex: 0,
+    });
+    expect(result.outcome).toBe("win");
+    expect(result.maxAdverseExcursion).toBe(0);
   });
 
   test("rMultiple sign matches outcome for long trades", () => {
@@ -181,6 +238,30 @@ describe(calculateOutcome, () => {
             lossResult.outcome !== "loss" ||
             (lossResult.rMultiple !== null && lossResult.rMultiple < 0);
           return winOk && lossOk;
+        },
+      ),
+    );
+  });
+
+  test("MAE is always non-negative", () => {
+    fc.assert(
+      fc.property(
+        fc.double({ min: 1.0, max: 1.5, noNaN: true }),
+        fc.double({ min: 0.005, max: 0.05, noNaN: true }),
+        (entry, risk) => {
+          const stopLoss = entry - risk;
+          const takeProfit = entry + risk * 2;
+          const bar = makeBar(entry + risk * 0.5, entry - risk * 0.8);
+
+          const result = calculateOutcome(
+            [makeBar(entry + 0.001, entry - 0.001), bar],
+            { entryPrice: entry, stopLoss, takeProfit, entryIndex: 0 },
+          );
+
+          return (
+            result.maxAdverseExcursion === null ||
+            result.maxAdverseExcursion >= 0
+          );
         },
       ),
     );

@@ -21,6 +21,7 @@ export function calculateOutcome(
       barsToOutcome: null,
       exitPrice: null,
       maxFavorableExcursion: null,
+      maxAdverseExcursion: null,
     };
   }
 
@@ -34,11 +35,13 @@ export function calculateOutcome(
       barsToOutcome: null,
       exitPrice: null,
       maxFavorableExcursion: null,
+      maxAdverseExcursion: null,
     };
   }
 
   const scanEnd = Math.min(entryIndex + 1 + maxBarsToHold, candles.length);
   let maxFavorable = 0;
+  let maxAdverse = 0;
 
   for (let i = entryIndex + 1; i < scanEnd; i++) {
     const bar = candles[i];
@@ -47,10 +50,14 @@ export function calculateOutcome(
     const favorable = isLong ? bar.high - entryPrice : entryPrice - bar.low;
     if (favorable > maxFavorable) maxFavorable = favorable;
 
+    const adverse = isLong ? entryPrice - bar.low : bar.high - entryPrice;
+    if (adverse > maxAdverse) maxAdverse = adverse;
+
     const stopHit = isLong ? bar.low <= stopLoss : bar.high >= stopLoss;
     const targetHit = isLong ? bar.high >= takeProfit : bar.low <= takeProfit;
 
     const mfe = +(maxFavorable / risk).toFixed(4);
+    const mae = +(maxAdverse / risk).toFixed(4);
 
     if (stopHit && targetHit) {
       return {
@@ -59,6 +66,7 @@ export function calculateOutcome(
         barsToOutcome: barsElapsed,
         exitPrice: stopLoss,
         maxFavorableExcursion: mfe,
+        maxAdverseExcursion: mae,
       };
     }
 
@@ -72,6 +80,7 @@ export function calculateOutcome(
         barsToOutcome: barsElapsed,
         exitPrice: stopLoss,
         maxFavorableExcursion: mfe,
+        maxAdverseExcursion: mae,
       };
     }
 
@@ -85,6 +94,7 @@ export function calculateOutcome(
         barsToOutcome: barsElapsed,
         exitPrice: takeProfit,
         maxFavorableExcursion: mfe,
+        maxAdverseExcursion: mae,
       };
     }
   }
@@ -96,6 +106,7 @@ export function calculateOutcome(
   const rMultiple = unrealizedPnl / risk;
   const barsToOutcome = scanEnd - 1 - entryIndex;
   const mfe = +(maxFavorable / risk).toFixed(4);
+  const mae = +(maxAdverse / risk).toFixed(4);
 
   return {
     outcome: "pending",
@@ -103,5 +114,6 @@ export function calculateOutcome(
     barsToOutcome,
     exitPrice: null,
     maxFavorableExcursion: mfe,
+    maxAdverseExcursion: mae,
   };
 }

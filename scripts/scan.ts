@@ -219,6 +219,7 @@ async function scanPairTimeframe(
         barsToOutcome: null,
         exitPrice: null,
         maxFavorableExcursion: null,
+        maxAdverseExcursion: null,
       },
     };
 
@@ -284,12 +285,19 @@ async function main(): Promise<void> {
   console.log(`\n=== Scanner run at ${new Date().toISOString()} ===\n`);
 
   // Health check FastAPI
+  let modelVersion = "v1.0";
   try {
     const healthRes = await fetch(`${FASTAPI_URL}/health`);
     if (!healthRes.ok) throw new Error(`Status ${healthRes.status}`);
-    const health = await healthRes.json();
+    const health = (await healthRes.json()) as {
+      status: string;
+      models_loaded: number;
+      n_features: number;
+      model_version?: string;
+    };
+    modelVersion = health.model_version ?? "v1.0";
     console.log(
-      `FastAPI: ${health.status}, ${health.models_loaded} models, ${health.n_features} features`,
+      `FastAPI: ${health.status}, ${health.models_loaded} models, ${health.n_features} features, ${modelVersion}`,
     );
   } catch (err) {
     console.error(
@@ -404,6 +412,7 @@ async function main(): Promise<void> {
             v2BucketProbs: pred.v2_bucket_probs,
             v3MfePrediction: pred.v3_mfe_prediction,
             featureVector: featureVectors[i] as unknown as Record<string, number>,
+            modelVersion,
           },
         });
 

@@ -172,4 +172,5 @@ export type OutcomeResult = {
   barsToOutcome: number | null;
   exitPrice: number | null;
   maxFavorableExcursion: number | null;
+  maxAdverseExcursion: number | null;
 };

@@ -1,9 +1,12 @@
 """FastAPI prediction server for XGBoost trading models."""
 
 import json
+import os
+import tempfile
 from pathlib import Path
 
 import numpy as np
+import psycopg2
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from xgboost import XGBClassifier, XGBRegressor
@@ -18,16 +21,18 @@ v2_model: XGBClassifier | None = None
 v3_model: XGBRegressor | None = None
 feature_order: list[str] = []
 mfe_bucket_labels: list[str] = []
+current_model_version: str = "v1.0"
 
 
 def load_models() -> None:
-    global v1_model, v2_model, v3_model, feature_order, mfe_bucket_labels
+    global v1_model, v2_model, v3_model, feature_order, mfe_bucket_labels, current_model_version
 
     # Load feature order from V1 meta
     v1_meta_path = MODELS_DIR / "xgb_v1b_multipattern_meta.json"
     with open(v1_meta_path) as f:
         v1_meta = json.load(f)
     feature_order = v1_meta["features"]
+    current_model_version = v1_meta.get("version", "v1.0")
 
     # Load MFE bucket labels from V2/V3 meta
     v2v3_meta_path = MODELS_DIR / "xgb_v2v3_meta.json"
@@ -47,7 +52,7 @@ def load_models() -> None:
     v3_model = XGBRegressor()
     v3_model.load_model(str(MODELS_DIR / "xgb_v3_regression.json"))
 
-    print(f"Loaded 3 models with {len(feature_order)} features")
+    print(f"Loaded 3 models (version {current_model_version}) with {len(feature_order)} features")
     print(f"MFE buckets: {mfe_bucket_labels}")
 
 
@@ -75,6 +80,16 @@ class HealthResponse(BaseModel):
     status: str
     models_loaded: int
     n_features: int
+    model_version: str
+
+
+class RetrainResponse(BaseModel):
+    version: str
+    trainingSize: int
+    v1Auc: float
+    v2Accuracy: float
+    v3R2: float
+    v3Mae: float
 
 
 def features_to_array(features: dict[str, float | None]) -> np.ndarray:
@@ -123,6 +138,7 @@ async def health() -> HealthResponse:
         status="ok",
         models_loaded=models_loaded,
         n_features=len(feature_order),
+        model_version=current_model_version,
     )
 
 
@@ -138,3 +154,65 @@ async def predict_batch(req: BatchPredictRequest) -> list[PredictResponse]:
     if v1_model is None:
         raise HTTPException(status_code=503, detail="Models not loaded")
     return [predict_single(features) for features in req.items]
+
+
+@app.post("/retrain", response_model=RetrainResponse)
+async def retrain() -> RetrainResponse:
+    """Retrain all 3 models and hot-reload them."""
+    from python.server.train_models import (
+        bump_version,
+        export_training_data,
+        train_all_models,
+    )
+
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise HTTPException(status_code=500, detail="DATABASE_URL not configured")
+
+    new_version = bump_version(current_model_version)
+
+    # Export combined training data to temp CSV
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
+        csv_path = tmp.name
+
+    try:
+        total_rows = export_training_data(db_url, csv_path)
+        print(f"Exported {total_rows} training rows for retrain")
+
+        metrics = train_all_models(csv_path, str(MODELS_DIR), new_version)
+        print(f"Retrain complete: {metrics}")
+
+        # Hot-reload models
+        load_models()
+
+        # Save new model version to DB
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        cur.execute("UPDATE model_versions SET is_active = false WHERE is_active = true")
+        cur.execute(
+            """
+            INSERT INTO model_versions (version, trained_at, training_size, v1_auc, v2_accuracy, v3_r2, v3_mae, is_active, created_at)
+            VALUES (%s, NOW(), %s, %s, %s, %s, %s, true, NOW())
+            """,
+            (
+                new_version,
+                metrics["training_size"],
+                metrics["v1_auc"],
+                metrics["v2_accuracy"],
+                metrics["v3_r2"],
+                metrics["v3_mae"],
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        return RetrainResponse(
+            version=new_version,
+            trainingSize=metrics["training_size"],
+            v1Auc=metrics["v1_auc"],
+            v2Accuracy=metrics["v2_accuracy"],
+            v3R2=metrics["v3_r2"],
+            v3Mae=metrics["v3_mae"],
+        )
+    finally:
+        os.unlink(csv_path)

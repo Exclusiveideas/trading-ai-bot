@@ -119,8 +119,55 @@ model Signal {
   featureVector   Json?     @map("feature_vector")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  status                String    @default("open") @db.VarChar(15)
+  outcome               String?   @db.VarChar(15)
+  exitPrice             Float?    @map("exit_price")
+  rMultiple             Float?    @map("r_multiple")
+  barsToOutcome         Int?      @map("bars_to_outcome")
+  maxFavorableExcursion Float?    @map("max_favorable_excursion")
+  maxAdverseExcursion   Float?    @map("max_adverse_excursion")
+  resolvedAt            DateTime? @map("resolved_at") @db.Timestamptz(6)
+  barsElapsed           Int?      @map("bars_elapsed")
+  lastCheckedAt         DateTime? @map("last_checked_at") @db.Timestamptz(6)
+  modelVersion          String?   @map("model_version") @db.VarChar(30)
+
   @@unique([pair, timeframe, patternType, patternEnd])
   @@index([createdAt(sort: Desc)])
   @@index([pair, timeframe])
+  @@index([status])
+  @@index([status, timeframe])
   @@map("signals")
+}
+
+model ModelVersion {
+  id           Int       @id @default(autoincrement())
+  version      String    @unique @db.VarChar(30)
+  trainedAt    DateTime  @map("trained_at") @db.Timestamptz(6)
+  trainingSize Int       @map("training_size")
+  v1Auc        Float?    @map("v1_auc")
+  v2Accuracy   Float?    @map("v2_accuracy")
+  v3R2         Float?    @map("v3_r2")
+  v3Mae        Float?    @map("v3_mae")
+  notes        String?
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("model_versions")
+}
+
+model AccuracySnapshot {
+  id               Int       @id @default(autoincrement())
+  modelVersion     String    @map("model_version") @db.VarChar(30)
+  windowSize       Int       @map("window_size")
+  v1Accuracy       Float?    @map("v1_accuracy")
+  v2BucketAccuracy Float?    @map("v2_bucket_accuracy")
+  v3MaeLive        Float?    @map("v3_mae_live")
+  pair             String?   @db.VarChar(20)
+  timeframe        String?   @db.VarChar(10)
+  patternType      String?   @map("pattern_type") @db.VarChar(30)
+  snapshotAt       DateTime  @map("snapshot_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([modelVersion, snapshotAt(sort: Desc)])
+  @@map("accuracy_snapshots")
 }

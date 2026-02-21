@@ -69,6 +69,7 @@ function makeCandidate(
       barsToOutcome: 15,
       exitPrice: 1.135,
       maxFavorableExcursion: 2.0,
+      maxAdverseExcursion: null,
     },
     ...overrides,
   };
@@ -232,6 +233,7 @@ describe("analyzeCandidate", () => {
           barsToOutcome: 15,
           exitPrice: 1.135,
           maxFavorableExcursion: 2.0,
+          maxAdverseExcursion: null,
         },
       });
       expect(analyzeCandidate(winCandidate, candles).notes).toContain(
@@ -245,6 +247,7 @@ describe("analyzeCandidate", () => {
           barsToOutcome: 5,
           exitPrice: 1.09,
           maxFavorableExcursion: 0.5,
+          maxAdverseExcursion: null,
         },
       });
       expect(analyzeCandidate(lossCandidate, candles).notes).toContain(
@@ -258,6 +261,7 @@ describe("analyzeCandidate", () => {
           barsToOutcome: null,
           exitPrice: null,
           maxFavorableExcursion: null,
+          maxAdverseExcursion: null,
         },
       });
       expect(analyzeCandidate(pendingCandidate, candles).notes).toContain(

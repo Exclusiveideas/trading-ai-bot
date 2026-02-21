@@ -81,3 +81,30 @@ export async function sendTelegramAlert(signal: SignalAlert): Promise<boolean> {
 
   return true;
 }
+
+export async function sendTelegramMessage(text: string): Promise<boolean> {
+  if (!isTelegramConfigured()) return false;
+
+  const token = getBotToken();
+  const chatId = getChatId();
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: "Markdown",
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error(`Telegram API error ${response.status}: ${body}`);
+    return false;
+  }
+
+  return true;
+}

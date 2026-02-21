@@ -131,6 +131,8 @@ model Signal {
   lastCheckedAt         DateTime? @map("last_checked_at") @db.Timestamptz(6)
   modelVersion          String?   @map("model_version") @db.VarChar(30)
 
+  orders                Order[]
+
   @@unique([pair, timeframe, patternType, patternEnd])
   @@index([createdAt(sort: Desc)])
   @@index([pair, timeframe])
@@ -170,4 +172,71 @@ model AccuracySnapshot {
 
   @@index([modelVersion, snapshotAt(sort: Desc)])
   @@map("accuracy_snapshots")
+}
+
+model Order {
+  id            Int       @id @default(autoincrement())
+  signalId      Int       @map("signal_id")
+  brokerOrderId String?   @map("broker_order_id") @db.VarChar(100)
+  pair          String    @db.VarChar(20)
+  direction     String    @db.VarChar(10)
+  volume        Float
+  entryPrice    Float     @map("entry_price")
+  slPrice       Float     @map("sl_price")
+  tpPrice       Float     @map("tp_price")
+  status        String    @default("pending") @db.VarChar(20)
+  filledPrice   Float?    @map("filled_price")
+  filledAt      DateTime? @map("filled_at") @db.Timestamptz(6)
+  closedPrice   Float?    @map("closed_price")
+  closedAt      DateTime? @map("closed_at") @db.Timestamptz(6)
+  closedReason  String?   @map("closed_reason") @db.VarChar(30)
+  pnl           Float?
+  commission    Float?
+  swap          Float?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  signal        Signal    @relation(fields: [signalId], references: [id])
+
+  @@index([signalId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("orders")
+}
+
+model RiskEvent {
+  id        Int      @id @default(autoincrement())
+  eventType String   @map("event_type") @db.VarChar(40)
+  details   Json
+  action    String   @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([eventType])
+  @@index([createdAt(sort: Desc)])
+  @@map("risk_events")
+}
+
+model DailyPnl {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @unique @db.Date
+  realizedPnl   Float    @default(0) @map("realized_pnl")
+  unrealizedPnl Float    @default(0) @map("unrealized_pnl")
+  tradesOpened  Int      @default(0) @map("trades_opened")
+  tradesClosed  Int      @default(0) @map("trades_closed")
+  highWaterMark Float    @default(0) @map("high_water_mark")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("daily_pnl")
+}
+
+model TradingState {
+  id                Int       @id @default(1)
+  enabled           Boolean   @default(false)
+  killSwitchActive  Boolean   @default(false) @map("kill_switch_active")
+  killSwitchReason  String?   @map("kill_switch_reason")
+  lastKillSwitchAt  DateTime? @map("last_kill_switch_at") @db.Timestamptz(6)
+  consecutiveLosses Int       @default(0) @map("consecutive_losses")
+  highWaterMark     Float     @default(0) @map("high_water_mark")
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("trading_state")
 }

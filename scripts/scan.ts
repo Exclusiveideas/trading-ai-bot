@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { prisma } from "../lib/prisma";
+import { executeSignal } from "../lib/execution/execute-signal";
 import { fetchLatestCandles } from "../lib/oanda";
 import { calculateAllIndicators } from "../lib/pipeline/indicators";
 import type { IndicatorRow } from "../lib/pipeline/indicators";
@@ -20,7 +21,11 @@ import {
   buildFeatureVector,
   type HtfSnapshot,
 } from "../lib/scanner/feature-vector";
-import { sendTelegramAlert, isTelegramConfigured } from "../lib/scanner/telegram";
+import {
+  sendTelegramAlert,
+  isTelegramConfigured,
+} from "../lib/scanner/telegram";
+import { runSignalQualityFilters } from "../lib/scanner/signal-quality-filter";
 import {
   FOREX_PAIRS,
   TIMEFRAMES,
@@ -32,7 +37,6 @@ import {
 
 const FASTAPI_URL = process.env.FASTAPI_URL ?? "http://localhost:8000";
 const QUALITY_THRESHOLD = 5;
-const WIN_PROB_THRESHOLD = 0.55;
 const RECENT_CANDLES = 3;
 
 type PredictionResponse = {
@@ -201,9 +205,7 @@ async function scanPairTimeframe(
 
   // Filter to recent patterns only (endIndex within last N candles)
   const minEndIndex = candles.length - RECENT_CANDLES;
-  const recentCandidates = candidates.filter(
-    (c) => c.endIndex >= minEndIndex,
-  );
+  const recentCandidates = candidates.filter((c) => c.endIndex >= minEndIndex);
 
   if (recentCandidates.length === 0) return [];
 
@@ -240,10 +242,7 @@ async function scanPairTimeframe(
       endIndicators.adx,
       endCandle.close,
     );
-    const session = identifyTradingSession(
-      new Date(endCandle.timestamp),
-      tf,
-    );
+    const session = identifyTradingSession(new Date(endCandle.timestamp), tf);
     const roundNum = findNearestRoundNumber(endCandle.close);
 
     const context = {
@@ -308,7 +307,9 @@ async function main(): Promise<void> {
   }
 
   const telegramReady = isTelegramConfigured();
-  console.log(`Telegram: ${telegramReady ? "configured" : "not configured (skipping alerts)"}`);
+  console.log(
+    `Telegram: ${telegramReady ? "configured" : "not configured (skipping alerts)"}`,
+  );
 
   let totalSignals = 0;
   let totalAlerts = 0;
@@ -367,21 +368,33 @@ async function main(): Promise<void> {
       const pred = predictions[i];
       const { candidate } = sc;
 
-      // Filter by threshold
-      const meetsThreshold =
-        pred.v1_win_prob >= WIN_PROB_THRESHOLD ||
-        ["1-1.5R", "1.5-2R", "2R+"].includes(pred.v2_mfe_bucket);
-
-      if (!meetsThreshold) {
-        console.log(
-          `  Skip ${candidate.patternType} ${sc.timeframe}: win=${(pred.v1_win_prob * 100).toFixed(0)}%, bucket=${pred.v2_mfe_bucket}`,
-        );
-        continue;
-      }
-
       const isBullish =
         candidate.keyPriceLevels.takeProfit > candidate.keyPriceLevels.entry;
       const direction = isBullish ? "bullish" : "bearish";
+
+      // Run signal quality filters (8 checks + composite score)
+      const filterResult = runSignalQualityFilters({
+        qualityRating: sc.qualityRating,
+        confidence: candidate.confidence,
+        v1WinProb: pred.v1_win_prob,
+        v2MfeBucket: pred.v2_mfe_bucket,
+        v3MfePrediction: pred.v3_mfe_prediction,
+        entryPrice: candidate.keyPriceLevels.entry,
+        stopLoss: candidate.keyPriceLevels.stopLoss,
+        takeProfit: candidate.keyPriceLevels.takeProfit,
+        direction,
+        pair,
+        timeframe: sc.timeframe,
+        tradingSession: sc.context.tradingSession,
+        htfContexts,
+      });
+
+      if (!filterResult.passed) {
+        console.log(
+          `  Filtered ${candidate.patternType} ${sc.timeframe}: ${filterResult.rejections.join(", ")} (score=${filterResult.compositeScore.toFixed(2)})`,
+        );
+        continue;
+      }
 
       // Upsert into signals table (dedup on unique constraint)
       try {
@@ -411,7 +424,10 @@ async function main(): Promise<void> {
             v2MfeBucket: pred.v2_mfe_bucket,
             v2BucketProbs: pred.v2_bucket_probs,
             v3MfePrediction: pred.v3_mfe_prediction,
-            featureVector: featureVectors[i] as unknown as Record<string, number>,
+            featureVector: featureVectors[i] as unknown as Record<
+              string,
+              number
+            >,
             modelVersion,
           },
         });
@@ -444,6 +460,28 @@ async function main(): Promise<void> {
               `  ALERT: ${candidate.patternType} ${sc.timeframe} (win=${(pred.v1_win_prob * 100).toFixed(0)}%, bucket=${pred.v2_mfe_bucket})`,
             );
           }
+          // Execute trade if execution is enabled
+          try {
+            const execResult = await executeSignal(prisma, {
+              id: signal.id,
+              pair,
+              direction,
+              entryPrice: candidate.keyPriceLevels.entry,
+              stopLoss: candidate.keyPriceLevels.stopLoss,
+              takeProfit: candidate.keyPriceLevels.takeProfit,
+              timeframe: sc.timeframe,
+              patternType: candidate.patternType,
+              v1WinProb: pred.v1_win_prob,
+            });
+            if (execResult.executed) {
+              console.log(`  EXECUTED: ${execResult.reason}`);
+            }
+          } catch (execErr) {
+            console.error(
+              `  Execution error:`,
+              execErr instanceof Error ? execErr.message : execErr,
+            );
+          }
         } else {
           console.log(
             `  Duplicate: ${candidate.patternType} ${sc.timeframe} (already alerted)`,
@@ -451,13 +489,8 @@ async function main(): Promise<void> {
         }
       } catch (err) {
         // Unique constraint violation = duplicate, safe to ignore
-        if (
-          err instanceof Error &&
-          err.message.includes("Unique constraint")
-        ) {
-          console.log(
-            `  Duplicate: ${candidate.patternType} ${sc.timeframe}`,
-          );
+        if (err instanceof Error && err.message.includes("Unique constraint")) {
+          console.log(`  Duplicate: ${candidate.patternType} ${sc.timeframe}`);
         } else {
           console.error(
             `  DB error:`,
